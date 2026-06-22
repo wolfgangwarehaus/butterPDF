@@ -68,6 +68,10 @@ class PdfViewer(QWidget):
         self._view.setPageSpacing(10)
         if get_settings().auto_hide_scrollbars:
             ui_helpers.install_autofade_scrollbars(self._view)
+        # Fit-width never needs horizontal scroll — hide the horizontal bar so it can't
+        # reserve its 8px lane at the very bottom (a frosted strip below the last page
+        # that made the footer chrome read thicker). _zoom_by flips it back to AsNeeded.
+        self._view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         self._empty = self._make_empty_state()
         self._stack = QStackedWidget(self)
@@ -141,6 +145,8 @@ class PdfViewer(QWidget):
     def _zoom_by(self, factor: float) -> None:
         self._fit = False
         self._view.setZoomMode(QPdfView.ZoomMode.Custom)
+        # Zoomed in the page can exceed the width — allow horizontal scroll again.
+        self._view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         target = max(_ZOOM_MIN, min(_ZOOM_MAX, self._view.zoomFactor() * factor))
         self._view.setZoomFactor(target)
         self._update_zoom_label()
@@ -148,6 +154,7 @@ class PdfViewer(QWidget):
     def _fit_width(self) -> None:
         self._fit = True
         self._view.setZoomMode(QPdfView.ZoomMode.FitToWidth)
+        self._view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._update_zoom_label()
 
     def _go(self, delta: int) -> None:
@@ -186,7 +193,7 @@ class PdfViewer(QWidget):
             footer.recenter()  # the page label changed width
 
     def _update_zoom_label(self) -> None:
-        self._zoom_label.setText("Fit" if self._fit else f"{round(self._view.zoomFactor() * 100)}%")
+        self._fit_btn.setText("Fit" if self._fit else f"{round(self._view.zoomFactor() * 100)}%")
 
     # ── widgets ──────────────────────────────────────────────────────────────
     def _make_empty_state(self) -> QWidget:
@@ -216,12 +223,12 @@ class PdfViewer(QWidget):
         row.setSpacing(6)
         row.addStretch(1)
 
-        # zoom group — right-aligned in the normal layout
+        # zoom group — tucked in the right corner: −  [Fit]  +  where the middle button
+        # shows the zoom % AND is the fit control (one "Fit", not two).
         self._zoom_out = self._tool("−", lambda: self._zoom_by(1 / _ZOOM_STEP))
-        self._zoom_label = self._label("Fit")
-        self._zoom_in = self._tool("+", lambda: self._zoom_by(_ZOOM_STEP))
         self._fit_btn = self._tool("Fit", self._fit_width)
-        for control in (self._zoom_out, self._zoom_label, self._zoom_in, self._fit_btn):
+        self._zoom_in = self._tool("+", lambda: self._zoom_by(_ZOOM_STEP))
+        for control in (self._zoom_out, self._fit_btn, self._zoom_in):
             row.addWidget(control)
 
         # page navigation — floats truly centered over the whole footer
