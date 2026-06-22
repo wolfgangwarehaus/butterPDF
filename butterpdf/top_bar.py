@@ -1,46 +1,57 @@
-"""TopBar — the app's top bar, which doubles as the titlebar in borderless mode.
+"""TopBar — butterPDF's top bar, which doubles as the titlebar in borderless mode.
 
-A generic strip: an app title on the left, a settings button on the right, and
-(when butterpdf owns the chrome) the minimize / maximize / close window controls.
-Dragging the bar moves the window (``startSystemMove``); double-click toggles
-maximize. An app subclasses or replaces this freely — it's deliberately thin.
+Left: a document menu (Open / Edit / Sign). Center: the app name + the open
+document's name. Right: settings + the minimize / maximize / close window controls.
+Dragging the bar moves the window (``startSystemMove``); double-click toggles maximize.
+An app subclasses or replaces this freely — it only needs ``restyle()``.
 """
 
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QMenu, QWidget
 
 from butterpdf import ui_helpers
 from butterpdf.bus import AppBus
-from butterpdf.design_tokens import TYPE_SUBHEAD, type_qss
+from butterpdf.design_tokens import TYPE_BODY, TYPE_SUBHEAD, type_qss
 from butterpdf.icon_button import IconButton
 from butterpdf.icons import icon
 
 
 class TopBar(QWidget):
-    HEIGHT = 48
+    HEIGHT = 40
 
     def __init__(self, window, *, titlebar_mode: bool, title: str = "butterpdf"):
         super().__init__(window)
         self._window = window
         self._titlebar_mode = titlebar_mode
+        self._viewer = None
         self.setFixedHeight(self.HEIGHT)
         self.setStyleSheet("background: transparent;")
 
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(16, 6, 10, 6)
-        lay.setSpacing(6)
+        lay.setContentsMargins(8, 4, 8, 4)
+        lay.setSpacing(4)
 
-        self.title = QLabel(title)
-        lay.addWidget(self.title)
+        # ── left: the document menu (Open / Edit / Sign) ───────────────────
+        self.menu_btn = self._chrome_button("menu", "Menu")
+        self.menu_btn.clicked.connect(self._show_menu)
+        lay.addWidget(self.menu_btn)
         lay.addStretch(1)
 
+        # ── center: app name + the open document ───────────────────────────
+        self.title = QLabel(title)
+        self.doc_label = QLabel("")
+        self.doc_label.hide()
+        lay.addWidget(self.title)
+        lay.addWidget(self.doc_label)
+        lay.addStretch(1)
+
+        # ── right: settings + window controls ──────────────────────────────
         self.settings_btn = self._chrome_button("settings", "Settings")
         self.settings_btn.clicked.connect(lambda: AppBus.get().show_settings.emit())
         lay.addWidget(self.settings_btn)
 
-        # Window controls only when we own the titlebar (borderless / frameless).
         if titlebar_mode:
             self.min_btn = self._chrome_button("win_minimize", "Minimize")
             self.min_btn.clicked.connect(window.showMinimized)
@@ -53,17 +64,46 @@ class TopBar(QWidget):
 
         self.restyle()
 
+    # ── viewer wiring ───────────────────────────────────────────────────────
+    def bind_viewer(self, viewer) -> None:
+        """Wire the document menu's Open + the centered doc name to the viewer."""
+        self._viewer = viewer
+        viewer.document_changed.connect(self.set_document_name)
+
+    def set_document_name(self, name: str) -> None:
+        if name:
+            self.doc_label.setText(f"·  {name}")
+            self.doc_label.show()
+        else:
+            self.doc_label.clear()
+            self.doc_label.hide()
+
+    def _show_menu(self) -> None:
+        menu = QMenu(self)
+        menu.addAction("Open…").triggered.connect(self._open)
+        menu.addSeparator()
+        for label in ("Edit", "Sign"):
+            soon = menu.addAction(f"{label}  (soon)")
+            soon.setEnabled(False)  # MVP fast-follow features
+        menu.exec(self.menu_btn.mapToGlobal(self.menu_btn.rect().bottomLeft()))
+
+    def _open(self) -> None:
+        if self._viewer is not None:
+            self._viewer.open_dialog()
+
     def _chrome_button(self, icon_name: str, tip: str) -> IconButton:
         b = IconButton()
         b.setIcon(icon(icon_name))
         b.setToolTip(tip)
-        b.setFixedSize(36, 32)
+        b.setFixedSize(32, 28)
         return b
 
     def restyle(self) -> None:
         """Re-read theme colors (call on AppBus.theme_changed) + refresh icons."""
         self.title.setStyleSheet(f"color: {ui_helpers.TEXT}; {type_qss(TYPE_SUBHEAD)}")
+        self.doc_label.setStyleSheet(f"color: {ui_helpers.TEXT_DIM}; {type_qss(TYPE_BODY)}")
         for name, btn in (
+            ("menu", getattr(self, "menu_btn", None)),
             ("settings", getattr(self, "settings_btn", None)),
             ("win_minimize", getattr(self, "min_btn", None)),
             ("win_maximize", getattr(self, "max_btn", None)),

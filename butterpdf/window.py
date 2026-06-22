@@ -175,11 +175,17 @@ class AppWindow(QMainWindow):
         # Windows: Qt-frameless (also grants the per-pixel alpha the Acrylic
         # backdrop shows through). KDE Wayland: a KWin noborder rule does it.
         self._win_frameless = IS_WINDOWS and not s.native_window_border
-        if self._win_frameless:
-            self.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
         self._borderless = (
             is_kde_wayland() and not s.native_window_border
         ) or self._win_frameless
+        # Strip the server-side titlebar on EVERY borderless platform — the top
+        # bar IS the titlebar. Linux previously relied on an external KWin
+        # `noborder` rule that's absent on a fresh launch, so the native
+        # decoration doubled up under our bar. Qt frameless removes it; the
+        # frost survives because blur is requested via enableBlurBehind
+        # (decoration-independent), not inferred from the decoration.
+        if self._borderless:
+            self.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
 
         if self._borderless:
             # Wayland: re-supply edge resize (KWin draws no border). Windows: the

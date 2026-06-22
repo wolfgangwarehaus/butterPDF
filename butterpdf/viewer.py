@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QPointF, Qt
+from PySide6.QtCore import QPointF, Qt, Signal
 from PySide6.QtPdf import QPdfDocument
 from PySide6.QtPdfWidgets import QPdfView
 from PySide6.QtWidgets import (
@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from butterpdf import ui_helpers
-from butterpdf.design_tokens import BTN_PRIMARY, TYPE_BODY, TYPE_DISPLAY, button_qss, type_qss
+from butterpdf.design_tokens import TYPE_BODY, TYPE_DISPLAY, type_qss
 
 _ZOOM_STEP = 1.25
 _ZOOM_MIN = 0.1
@@ -36,10 +36,13 @@ class PdfViewer(QWidget):
     the window footer). Open a PDF via :meth:`open_path`, :meth:`open_dialog`, or by
     dropping a file onto it."""
 
+    document_changed = Signal(str)  # basename when a doc opens; "" when cleared/failed
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setAcceptDrops(True)
         self._fit = True  # track ZoomMode ourselves (QPdfView has no public getter)
+        self._path: str | None = None
 
         self._doc = QPdfDocument(self)
         self._view = QPdfView(self)
@@ -68,7 +71,8 @@ class PdfViewer(QWidget):
         return self._footer
 
     def open_path(self, path: str | Path) -> None:
-        self._doc.load(str(path))
+        self._path = str(path)
+        self._doc.load(self._path)
 
     def open_dialog(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "Open PDF", "", "PDF documents (*.pdf)")
@@ -119,12 +123,14 @@ class PdfViewer(QWidget):
     def _on_status_changed(self, status) -> None:
         if status == QPdfDocument.Status.Ready:
             self._stack.setCurrentWidget(self._view)
+            self.document_changed.emit(Path(self._path).name if self._path else "")
         elif status == QPdfDocument.Status.Error:
             if self._doc.error() == QPdfDocument.Error.IncorrectPassword:
                 self._set_empty_text("That PDF is password-protected — not supported yet.")
             else:
                 self._set_empty_text("Couldn't open that file as a PDF.")
             self._stack.setCurrentWidget(self._empty)
+            self.document_changed.emit("")
         self._refresh()
 
     def _refresh(self) -> None:
@@ -165,14 +171,8 @@ class PdfViewer(QWidget):
         bar = QWidget()
         bar.setStyleSheet("background: transparent;")
         row = QHBoxLayout(bar)
-        row.setContentsMargins(14, 8, 14, 8)
+        row.setContentsMargins(14, 5, 14, 5)
         row.setSpacing(6)
-
-        open_btn = QPushButton("Open")
-        open_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        open_btn.setStyleSheet(button_qss(BTN_PRIMARY))
-        open_btn.clicked.connect(self.open_dialog)
-        row.addWidget(open_btn)
         row.addStretch(1)
 
         self._prev = self._tool("◀", lambda: self._go(-1))

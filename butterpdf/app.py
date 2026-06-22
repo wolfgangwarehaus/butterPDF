@@ -173,6 +173,8 @@ def _build_content(window) -> QWidget:
 
     viewer = PdfViewer()
     window.set_footer(viewer.controls())
+    if hasattr(window.top_bar, "bind_viewer"):
+        window.top_bar.bind_viewer(viewer)  # menu Open + centered doc name
     for arg in sys.argv[1:]:
         if arg.lower().endswith(".pdf") and Path(arg).is_file():
             viewer.open_path(arg)
