@@ -73,6 +73,15 @@ class Settings:
         self._set("ui/native_window_border", bool(v))
 
     @property
+    def auto_hide_scrollbars(self) -> bool:
+        """Minimal fading scrollbars (default) vs always-visible standard ones."""
+        return _as_bool(self._s.value("ui/auto_hide_scrollbars"), True)
+
+    @auto_hide_scrollbars.setter
+    def auto_hide_scrollbars(self, v: bool) -> None:
+        self._set("ui/auto_hide_scrollbars", bool(v))
+
+    @property
     def show_tooltips(self) -> bool:
         return _as_bool(self._s.value("ui/show_tooltips"), True)
 

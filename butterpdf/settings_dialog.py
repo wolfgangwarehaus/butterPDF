@@ -9,6 +9,7 @@ live-theme pattern an app builds on.
 
 from __future__ import annotations
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton
 
 from butterpdf import ui_helpers
@@ -36,36 +37,38 @@ _FONT_SIZES = [
 
 class SettingsDialog(FrostedDialog):
     def __init__(self, parent=None):
-        super().__init__(parent, title="Settings", icon_name="settings", min_width=420)
+        super().__init__(parent, title="Settings", icon_name="settings", min_width=300)
         self.s = get_settings()
         # Merge the Selector QSS into the dialog's sheet so the dropdowns style.
         self.setStyleSheet(self.styleSheet() + selector_qss())
 
-        self.content_layout.addWidget(self._label("THEME"))
+        center = Qt.AlignmentFlag.AlignHCenter
+        self.content_layout.addWidget(self._label("THEME"), 0, center)
         self.theme_sel = Selector()
         for lbl, val in _THEME_MODES:
             self.theme_sel.addItem(lbl, val)
         self._select(self.theme_sel, self.s.theme_mode)
         self.theme_sel.setFixedWidth(256)
         self.theme_sel.currentIndexChanged.connect(self._on_theme_mode)
-        self.content_layout.addWidget(self.theme_sel)
+        self.content_layout.addWidget(self.theme_sel, 0, center)
 
-        self.content_layout.addWidget(self._label("ACCENT COLOR"))
+        self.content_layout.addWidget(self._label("ACCENT COLOR"), 0, center)
         self.content_layout.addLayout(self._accent_row())
 
-        self.content_layout.addWidget(self._label("FONT SIZE"))
+        self.content_layout.addWidget(self._label("FONT SIZE"), 0, center)
         self.font_sel = Selector()
         for lbl, val in _FONT_SIZES:
             self.font_sel.addItem(lbl, val)
         self._select(self.font_sel, self.s.font_scale)
         self.font_sel.setFixedWidth(256)
         self.font_sel.currentIndexChanged.connect(self._on_font_size)
-        self.content_layout.addWidget(self.font_sel)
+        self.content_layout.addWidget(self.font_sel, 0, center)
         self._restart_note = QLabel("")
+        self._restart_note.setAlignment(center)
         self._restart_note.setStyleSheet(
             f"color: {ui_helpers.WARN_FG}; {type_qss(TYPE_CAPTION)}"
         )
-        self.content_layout.addWidget(self._restart_note)
+        self.content_layout.addWidget(self._restart_note, 0, center)
 
     # ── Builders ───────────────────────────────────────────────────────────
     def _label(self, text: str) -> QLabel:
@@ -76,6 +79,7 @@ class SettingsDialog(FrostedDialog):
     def _accent_row(self) -> QHBoxLayout:
         row = QHBoxLayout()
         row.setSpacing(10)
+        row.addStretch(1)
         self._swatches = []
         for name, hex_ in ACCENT_PRESETS:
             sw = QPushButton()

@@ -92,7 +92,7 @@ Quick-sign PNG as the visible stamp; a **zero-openssl** first-run identity wizar
 make-or-break signing-onboarding UX risk lives here — which is exactly why it's a
 focused fast-follow, not v1.)
 
-**Later:** Tier 3 PKCS#11 smartcard/QES signing; PAdES B-LT/B-LTA (LTV); full annotation set; page organize (rotate/reorder/merge/split); signature validation panel; AES-256 encryption + PDF/A export; careful browser integration; preserve PDF/UA tags on edit.
+**Later:** **PDF dark mode** — invert bright pages to dark-grey *or* OLED-black with text re-colored to match, a setting **independent of the app chrome theme** (light chrome + dark PDFs is valid); Tier 3 PKCS#11 smartcard/QES signing; PAdES B-LT/B-LTA (LTV); full annotation set; page organize (rotate/reorder/merge/split); signature validation panel; AES-256 encryption + PDF/A export; careful browser integration; preserve PDF/UA tags on edit.
 
 ## Recommended stack (with licenses)
 

@@ -8,10 +8,11 @@ popping a near-black native box against a light theme.
 callers fill with their own widgets. :class:`FrostedMessageDialog` is the thin
 message-box subclass (see :func:`frosted_warning` / :func:`frosted_info`).
 
-Mirrors ``CastDialog``'s scaffold: frameless everywhere EXCEPT KDE Wayland,
-where it stays a decorated ``Window`` stripped by the app-wide KWin
-``noborder`` rule (KWin drops the blur effect on undecorated windows, so the
-decorated+noborder route is what keeps it frosted). Body colour is
+Frameless on every platform unless the user opts into native chrome
+(``settings.native_window_border``); the custom titlebar IS the chrome, and the
+dialog is fixed-size (non-resizable) by default — pass ``resizable=True`` to opt in.
+Frost survives frameless because compositor blur is requested via
+``enableBlurBehind`` (decoration-independent). Body colour is
 status-aware (``body_color_tuple`` — glass when blur is verified, near-opaque
 otherwise) so it is never see-through; compositor blur is applied once the
 surface is mapped, matching the other frosted surfaces.
@@ -27,6 +28,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -53,15 +55,19 @@ class FrostedDialog(QDialog):
         title: str = "",
         icon_name: str = "",
         min_width: int = 360,
+        resizable: bool = False,
     ) -> None:
         super().__init__(parent)
-        from butterpdf.platform_compat import is_kde_wayland
+        from butterpdf.settings import get_settings
         from butterpdf.ui_helpers import GLOBAL_STYLE, body_color_tuple
 
-        # Frameless off KDE Wayland; on KDE the decorated window + the app-wide
-        # KWin noborder rule keeps the blur effect (see module docstring).
+        # Frameless on EVERY platform unless the user opts into native chrome — the
+        # custom titlebar IS the chrome. (Previously decorated on KDE Wayland, relying
+        # on an app-wide KWin `noborder` rule that's absent on a fresh launch, so the
+        # native decoration doubled up over the frosted header. Frost survives
+        # frameless: blur is via enableBlurBehind, which is decoration-independent.)
         flags = Qt.WindowType.Window
-        if not is_kde_wayland():
+        if not get_settings().native_window_border:
             flags |= Qt.WindowType.FramelessWindowHint
         self.setWindowFlags(flags)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -77,6 +83,10 @@ class FrostedDialog(QDialog):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
+        if not resizable:
+            # Fit content + stay non-resizable — a settings/message dialog has no
+            # reason to be dragged larger (opt in with resizable=True).
+            outer.setSizeConstraint(QLayout.SizeConstraint.SetFixedSize)
         outer.addWidget(self._build_titlebar(title, icon_name))
 
         # Transparent body host so the rounded paint shows through; callers

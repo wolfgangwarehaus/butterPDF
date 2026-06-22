@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
 
 from butterpdf import ui_helpers
 from butterpdf.design_tokens import TYPE_BODY, TYPE_DISPLAY, type_qss
+from butterpdf.settings import get_settings
 from butterpdf.top_bar import CenteredBar
 
 _ZOOM_STEP = 1.25
@@ -53,6 +54,8 @@ class PdfViewer(QWidget):
         self._view.setZoomMode(QPdfView.ZoomMode.FitToWidth)
         self._nav = self._view.pageNavigator()
         self._frost_view()
+        if get_settings().auto_hide_scrollbars:
+            ui_helpers.install_autofade_scrollbars(self._view)
 
         self._empty = self._make_empty_state()
         self._stack = QStackedWidget(self)
