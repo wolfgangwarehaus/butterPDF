@@ -60,12 +60,12 @@ class PdfViewer(QWidget):
         # the LEFT, and let the page fill the rest (doc margins 0) — both sides then read
         # as a matching 8px frosted strip, with the accent pill centered in the right.
         self._view.setViewportMargins(8, 0, 0, 0)
-        # No top/bottom bezel: the page meets the top bar + footer flush — the extra
-        # frosted strip above the first page / below the last threw off the look. The
-        # side gutters are the 8px viewport margin (left) + scrollbar lane (right);
-        # pageSpacing is the gap BETWEEN pages, kept.
-        self._view.setDocumentMargins(QMargins(0, 0, 0, 0))
+        # No top/bottom bezel: the page meets the top bar + footer flush. QtPdf adds a
+        # trailing pageSpacing gap BELOW the last page (no API to drop just it), so a
+        # matching NEGATIVE bottom margin cancels it. Inter-page gaps stay; side gutters
+        # are the 8px viewport margin (left) + the scrollbar lane (right).
         self._view.setPageSpacing(10)
+        self._view.setDocumentMargins(QMargins(0, 0, 0, -10))
         if get_settings().auto_hide_scrollbars:
             ui_helpers.install_autofade_scrollbars(self._view)
         # Fit-width never needs horizontal scroll — hide the horizontal bar so it can't
