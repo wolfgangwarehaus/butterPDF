@@ -164,6 +164,13 @@ exclude = ["tests*", "docs*", "packaging*"]
 # The brand SVG (butterpdf/assets/butterpdf.svg) ships in the wheel so make_app_icon
 # resolves it via importlib.resources.
 "butterpdf.assets" = ["*.svg"]
+# The drag-repaint KWin scripted effect ships as data (JSON + JS) inside the
+# butterpdf.drag_repaint package — installed into the user's KWin effects dir at
+# runtime by butterpdf/drag_repaint/_kwin.py.
+"butterpdf.drag_repaint" = [
+    "effect/butterpdf_dragrepaint/metadata.json",
+    "effect/butterpdf_dragrepaint/contents/code/main.js",
+]
 
 [tool.pytest.ini_options]
 # GUI tests run headless — conftest.py forces QT_QPA_PLATFORM=offscreen before

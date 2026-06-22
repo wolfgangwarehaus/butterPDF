@@ -117,6 +117,16 @@ def run_app(content_factory, *, identity=None, single_instance=True) -> int:
     # be smoke-tested on a real desktop — see docs/TODO.md (baking Beat 2 defer).
     app.setDesktopFileName(ident.app())
 
+    # KWin drag-repaint effect: kills the NVIDIA-EGL stale-blur "line artifact"
+    # smear left behind when dragging a blurred window (KWin bug 455526/457727).
+    # Idempotent + best-effort; a no-op off KDE Wayland.
+    try:
+        from butterpdf import drag_repaint
+
+        drag_repaint.sync()
+    except Exception:
+        pass
+
     # Single instance: hand off to the already-running copy rather than opening
     # a second window. Keep the lock object alive for the process lifetime.
     si = None

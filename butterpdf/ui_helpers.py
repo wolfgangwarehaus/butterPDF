@@ -1820,12 +1820,12 @@ class AutoFadeScrollBar(QScrollBar):
         # thin slick bar rather than a chunky block flush to the edge.
         if self.orientation() == Qt.Orientation.Vertical:
             handle.adjust(0, self.PILL_INSET, 0, -self.PILL_INSET)
-            cx = handle.center().x()
+            cx = self.width() // 2  # the widget's true center, not the (inset) handle's
             handle.setLeft(cx - self.PILL_THICKNESS // 2)
             handle.setWidth(self.PILL_THICKNESS)
         else:
             handle.adjust(self.PILL_INSET, 0, -self.PILL_INSET, 0)
-            cy = handle.center().y()
+            cy = self.height() // 2
             handle.setTop(cy - self.PILL_THICKNESS // 2)
             handle.setHeight(self.PILL_THICKNESS)
 

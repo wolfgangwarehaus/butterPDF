@@ -1,0 +1,17 @@
+{
+    "KPackageStructure": "KWin/Effect",
+    "KPlugin": {
+        "Id": "butterpdf_dragrepaint",
+        "Name": "butterpdf — full repaint on drag",
+        "Description": "Holds butterpdf windows under a zero-magnitude transform while they are dragged, so KWin renders them through the full-repaint path and avoids stale blur artifacts (KWin bug 455526/457727).",
+        "Category": "Appearance",
+        "EnabledByDefault": false,
+        "License": "MIT",
+        "Authors": [
+            {
+                "Name": "butterpdf"
+            }
+        ]
+    },
+    "X-Plasma-API": "javascript"
+}
