@@ -30,7 +30,8 @@ a = Analysis(
     runtime_hooks=[],
     excludes=[
         # Heavy Qt modules the chrome never imports — keeps the bundle lean. A
-        # fork that uses any of these removes it from this list.
+        # fork that uses any of these removes it from this list. butterPDF's
+        # viewer needs QtPdf + QtPdfWidgets (PDFium), so they're NOT excluded.
         "tkinter",
         "PySide6.QtWebEngineCore",
         "PySide6.QtWebEngineWidgets",
@@ -39,7 +40,6 @@ a = Analysis(
         "PySide6.Qt3DCore",
         "PySide6.QtCharts",
         "PySide6.QtDataVisualization",
-        "PySide6.QtPdf",
     ],
     noarchive=False,
 )

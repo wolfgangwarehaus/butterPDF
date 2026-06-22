@@ -163,10 +163,26 @@ def run_app(content_factory, *, identity=None, single_instance=True) -> int:
     return app.exec()
 
 
+def _build_content(window) -> QWidget:
+    """butterPDF's content: the PDF viewer, its controls pinned in the window footer.
+    Opens a PDF passed on the command line so OS "Open with" / `butterpdf file.pdf`
+    lands straight on the document."""
+    from pathlib import Path
+
+    from butterpdf.viewer import PdfViewer
+
+    viewer = PdfViewer()
+    window.set_footer(viewer.controls())
+    for arg in sys.argv[1:]:
+        if arg.lower().endswith(".pdf") and Path(arg).is_file():
+            viewer.open_path(arg)
+            break
+    return viewer
+
+
 def main() -> None:
-    """The default entry: boot butterpdf with the placeholder canvas. A fork either
-    swaps the placeholder or calls :func:`run_app` with its own content."""
-    sys.exit(run_app(lambda _window: _placeholder()))
+    """The default entry: boot butterPDF with the PDF viewer."""
+    sys.exit(run_app(_build_content))
 
 
 if __name__ == "__main__":
