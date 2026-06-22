@@ -9,7 +9,7 @@ bar moves the window; double-click toggles maximize.
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QMenu, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget
 
 from butterpdf import ui_helpers
 from butterpdf.bus import AppBus
@@ -61,16 +61,16 @@ class TopBar(CenteredBar):
         lay.setContentsMargins(8, 4, 8, 4)
         lay.setSpacing(4)
 
-        # ── left: the document menu (Open / Edit / Sign) ───────────────────
+        # ── left: settings gear + the document menu (Open / Edit / Sign) ───
+        self.settings_btn = self._chrome_button("settings", "Settings")
+        self.settings_btn.clicked.connect(lambda: AppBus.get().show_settings.emit())
+        lay.addWidget(self.settings_btn)
         self.menu_btn = self._chrome_button("menu", "Menu")
         self.menu_btn.clicked.connect(self._show_menu)
         lay.addWidget(self.menu_btn)
         lay.addStretch(1)
 
-        # ── right: settings + window controls ──────────────────────────────
-        self.settings_btn = self._chrome_button("settings", "Settings")
-        self.settings_btn.clicked.connect(lambda: AppBus.get().show_settings.emit())
-        lay.addWidget(self.settings_btn)
+        # ── right: window controls ─────────────────────────────────────────
         if titlebar_mode:
             self.min_btn = self._chrome_button("win_minimize", "Minimize")
             self.min_btn.clicked.connect(window.showMinimized)
@@ -112,7 +112,7 @@ class TopBar(CenteredBar):
         self.recenter()  # the centered group changed width
 
     def _show_menu(self) -> None:
-        menu = QMenu(self)
+        menu = ui_helpers.opaque_menu(self, blur_corner_radius=8)  # frosted, readable
         menu.addAction("Open…").triggered.connect(self._open)
         menu.addSeparator()
         for label in ("Edit", "Sign"):

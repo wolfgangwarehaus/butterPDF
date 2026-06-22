@@ -1754,9 +1754,10 @@ class AutoFadeScrollBar(QScrollBar):
 
     IDLE_MS = 900  # how long the pill stays visible after the last interaction
     FADE_MS = 220  # cross-fade duration
-    PILL_ALPHA = 110  # peak alpha of the handle (0-255); ~0.43
+    PILL_ALPHA = 150  # peak alpha of the handle (0-255)
     PILL_RADIUS = 3
-    PILL_INSET = 2  # px shrink applied to the handle rect for breathing room
+    PILL_INSET = 2  # px shrink on the LONG axis for breathing room at the ends
+    PILL_THICKNESS = 6  # cross-axis width — a slim pill centered in the lane
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1770,7 +1771,10 @@ class AutoFadeScrollBar(QScrollBar):
         self.setAutoFillBackground(False)
         # Strip any application-level QSS that would otherwise reach
         # this widget. We paint everything manually.
-        self.setStyleSheet("QScrollBar { background: transparent; border: none; }")
+        self.setStyleSheet(
+            "QScrollBar:vertical { width: 14px; background: transparent; border: none; }"
+            "QScrollBar:horizontal { height: 14px; background: transparent; border: none; }"
+        )
 
         self._anim = QPropertyAnimation(self, b"handleAlpha", self)
         self._anim.setDuration(self.FADE_MS)
@@ -1812,20 +1816,28 @@ class AutoFadeScrollBar(QScrollBar):
         # Inset on the long axis so the pill has a tiny breath of
         # space at each end of its slot — reads as a floating element
         # rather than something flush to invisible bounds.
+        # Slim the pill on the cross axis + center it in the lane, so it reads as a
+        # thin slick bar rather than a chunky block flush to the edge.
         if self.orientation() == Qt.Orientation.Vertical:
             handle.adjust(0, self.PILL_INSET, 0, -self.PILL_INSET)
+            cx = handle.center().x()
+            handle.setLeft(cx - self.PILL_THICKNESS // 2)
+            handle.setWidth(self.PILL_THICKNESS)
         else:
             handle.adjust(self.PILL_INSET, 0, -self.PILL_INSET, 0)
+            cy = handle.center().y()
+            handle.setTop(cy - self.PILL_THICKNESS // 2)
+            handle.setHeight(self.PILL_THICKNESS)
 
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setPen(Qt.PenStyle.NoPen)
         # Brighter on hover so the pill answers cursor presence.
-        peak = 180 if self._hovered else self.PILL_ALPHA
+        peak = 220 if self._hovered else self.PILL_ALPHA
         # Scale alpha down by the current handleAlpha fraction.
         alpha = int(peak * (self._handle_alpha / 255))
-        # Theme ink so the handle reads on a light theme too.
-        _hr, _hg, _hb = _hex_to_rgb_safe(TEXT)
+        # The live app ACCENT so the scrollbar carries the accent colour.
+        _hr, _hg, _hb = _hex_to_rgb_safe(ACCENT)
         painter.setBrush(QColor(_hr, _hg, _hb, alpha))
         painter.drawRoundedRect(handle, self.PILL_RADIUS, self.PILL_RADIUS)
 

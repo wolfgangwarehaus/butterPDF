@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QPointF, Qt, Signal
+from PySide6.QtCore import QMargins, QPointF, Qt, Signal
 from PySide6.QtGui import QColor, QPalette
 from PySide6.QtPdf import QPdfDocument
 from PySide6.QtPdfWidgets import QPdfView
@@ -54,6 +54,10 @@ class PdfViewer(QWidget):
         self._view.setZoomMode(QPdfView.ZoomMode.FitToWidth)
         self._nav = self._view.pageNavigator()
         self._frost_view()
+        # Symmetric, generous page bezels — the page floats centered with matching
+        # left/right margins (the slim accent scrollbar rides the right one).
+        self._view.setDocumentMargins(QMargins(24, 16, 24, 16))
+        self._view.setPageSpacing(16)
         if get_settings().auto_hide_scrollbars:
             ui_helpers.install_autofade_scrollbars(self._view)
 
