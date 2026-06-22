@@ -1772,8 +1772,8 @@ class AutoFadeScrollBar(QScrollBar):
         # Strip any application-level QSS that would otherwise reach
         # this widget. We paint everything manually.
         self.setStyleSheet(
-            "QScrollBar:vertical { width: 14px; background: transparent; border: none; }"
-            "QScrollBar:horizontal { height: 14px; background: transparent; border: none; }"
+            "QScrollBar:vertical { width: 8px; background: transparent; border: none; }"
+            "QScrollBar:horizontal { height: 8px; background: transparent; border: none; }"
         )
 
         self._anim = QPropertyAnimation(self, b"handleAlpha", self)
