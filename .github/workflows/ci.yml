@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint-and-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # PySide6's offscreen platform plugin still needs the EGL/GL/xkb libs.
+      - name: System libs for headless Qt
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon0
+      - name: Install
+        run: pip install ruff PySide6
+      - name: Lint
+        run: ruff check butterpdf/
+      - name: Boot smoke (offscreen)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          python -c "
+          import sys
+          from PySide6.QtCore import QTimer
+          from PySide6.QtWidgets import QApplication
+          app = QApplication(sys.argv)
+          app.setApplicationName('butterpdf'); app.setOrganizationName('butterpdf')
+          import butterpdf.app as A
+          from butterpdf.window import AppWindow
+          w = AppWindow(title='butterpdf'); w.set_content(A._placeholder()); w.show()
+          app.processEvents()
+          from butterpdf.settings_dialog import SettingsDialog
+          SettingsDialog(w).show(); app.processEvents()
+          QTimer.singleShot(0, app.quit); app.exec()
+          print('butterpdf boots + settings opens')
+          "
+
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The editable install runs setuptools-scm, which derives the version
+          # from the tag — it needs the full history + tags, not a shallow clone.
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # PySide6's offscreen platform plugin still needs the EGL/GL/xkb libs.
+      - name: System libs for headless Qt
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon0
+      - name: Install (core + dev extras)
+        run: pip install -e .[dev]
+      - name: Packaging drift gate (butterpdf bake --check)
+        run: python -m butterpdf.bake --check
+      - name: Pytest (offscreen)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: pytest
+
+  # Gate-test the PyPI build itself (the publish workflow runs the same steps on a
+  # tag): catch a broken sdist/wheel or bad metadata BEFORE a release, not during.
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # setuptools-scm derives the version from the tag — needs full history.
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build + check sdist & wheel
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+          python -m twine check dist/*

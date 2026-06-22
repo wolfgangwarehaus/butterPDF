@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Written by setuptools-scm at build time (the tag is the version); never committed.
+butterpdf/_version.py

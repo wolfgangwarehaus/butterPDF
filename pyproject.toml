@@ -1,0 +1,187 @@
+# butterpdf — the wolfgang warehaus app base. Fork this project, rename the
+# `butterpdf` package + the identity fields below to your app, and build.
+#
+# Flat layout (the single `butterpdf/` package at the repo root, entry in
+# `butterpdf/app.py`) so `python -m butterpdf` runs straight from a checkout with no
+# install. Core stays PySide6-only — heavy/native deps (a PDF engine, mpv, a
+# cast stack) belong in [project.optional-dependencies], never the base.
+
+[build-system]
+requires = ["setuptools>=68", "wheel", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "butterpdf"
+# version is DYNAMIC — the tag is the version (docs/BAKING.md §2 principle 4).
+# setuptools-scm derives it from the latest `git tag vX.Y.Z`; there is nothing
+# to stamp in N files and therefore no version-drift class to gate against.
+dynamic = ["version"]
+description = "Open, fill, sign, done — a fast frosted PDF tool."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "GPL-2.0-or-later" }
+authors = [{ name = "august", email = "augustvontrips@gmail.com" }]
+keywords = ["pyside6", "qt", "desktop", "starter", "template", "frosted-glass", "cross-platform", "kde", "windows"]
+# PyPI Trove classifiers are a hand-maintained SECOND site, not yet rendered
+# from [tool.butterpdf.metadata]. The License line is guarded against license_spdx by
+# tests/test_metadata.py; the OS/Environment lines are a free-text platform fact
+# a fork must edit by hand until the renderer derives them (license from
+# license_spdx, OS/Env from a platform flag). They are distinct from the
+# sidecar's freedesktop categories[] (a different taxonomy).
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: X11 Applications :: Qt",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU General Public License v2 or later (GPLv2+)",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows :: Windows 11",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+]
+# runtime_deps (docs/BAKING.md §3.3 — "the one genuinely app-specific block")
+# lives HERE, in [project].dependencies, as its single source; it is NOT
+# duplicated into the sidecar. The Beat-2 renderer projects it onward (AUR
+# depends, deb shlib closure, AppImage bundling) from this list.
+dependencies = [
+    # Core is PySide6 only — that's the whole point. Cap below Qt 7 (a hard
+    # compat break); floor at the earliest API the chrome relies on.
+    "PySide6>=6.6.0,<7.0",
+]
+
+[project.optional-dependencies]
+# `bake` is the release tooling (butterpdf bake); jinja2 is build-time only — the
+# shipped app never imports it. dev includes it so the generate-then-verify gate
+# (tests/test_bake.py) runs in the default test pass.
+bake = ["jinja2>=3"]
+dev = ["ruff", "pytest", "pytest-xdist", "setuptools-scm>=8", "jinja2>=3"]
+
+[project.gui-scripts]
+butterpdf = "butterpdf.app:main"
+
+[project.scripts]
+# The oven: render packaging/ from [tool.butterpdf.metadata] (docs/BAKING.md §2).
+butterpdf-bake = "butterpdf.bake:main"
+# The entry verb for building WITH butterpdf: scaffold a fresh OWNED app from a clone.
+butterpdf-new = "butterpdf.scaffold:main"
+
+[project.urls]
+Homepage = "https://github.com/wolfgangwarehaus/butterpdf"
+Repository = "https://github.com/wolfgangwarehaus/butterpdf"
+
+# ── the baking-phase metadata sidecar (docs/BAKING.md §3) ────────────────────
+# ONE source for app identity + descriptive/store metadata. The oven (a future
+# `butterpdf bake`) renders every manifest — .desktop, metainfo, deb control, winget
+# YAML, PKGBUILD, the landing page — from this table; none is hand-authored. The
+# id projections (app_id_base / windows_aumid / cf_bundle_id) are COMPUTED from
+# the slugs below via butterpdf.identity's pure helpers, never re-literalised. Where
+# a field overlaps `[project]` (description↔summary, keywords, license,
+# requires-python, the maintainer), the two are kept identical and
+# tests/test_metadata.py asserts they never drift — the exact failure mode this
+# table exists to kill (jellytoast carried six summary wordings and three
+# publisher strings; see docs/BAKING.md §1).
+[tool.butterpdf.metadata]
+# Schema-versioned like color_tokens' PALETTE_VERSION: bump when the field set
+# changes so the renderer and the verify gate move together.
+metadata_version = 1
+
+# the inputs everything else derives from
+app_slug = "butterpdf"
+org_slug = "wolfgangwarehaus"
+github_owner = "wolfgangwarehaus"
+repo_name = "butterpdf"
+display_name = "butterPDF"
+generic_name = "App Base"
+summary = "Open, fill, sign, done — a fast frosted PDF tool."
+license_spdx = "GPL-2.0-or-later"
+
+# descriptive / store metadata — the renderer's inputs; these never touch the
+# running QApplication (that's butterpdf.identity's job — docs/BAKING.md §4).
+long_description = """\
+butterpdf is a fork-and-own application base for PySide6 desktop apps: a frosted, \
+KDE-native window chrome, a token-driven design system with live re-theming, \
+and the cross-platform scaffolding (single-instance, notifications, autostart, \
+power inhibition) every app otherwise re-implements. Fork it, set your identity \
+once, and build your app on a finished base."""
+maintainer_name = "august"
+maintainer_email = "augustvontrips@gmail.com"
+# Publisher display name — the spaced brand is a DISPLAY variant of org_slug,
+# not a third source (resolves jellytoast's august/wolfgangwarehaus/wolfgang
+# warehaus drift; docs/BAKING.md §9).
+publisher_display_name = "wolfgang warehaus"
+# A single freedesktop MAIN category (more than one risks a double menu entry —
+# desktop-file-validate hint). butterpdf is developer tooling; a fork sets its own.
+categories = ["Development"]
+keywords = ["pyside6", "qt", "desktop", "starter", "template", "frosted-glass", "cross-platform", "kde", "windows"]
+requires_python = ">=3.11"
+entry_point = "butterpdf.app:main"
+icon_svg_source = "butterpdf/assets/butterpdf.svg"
+# Ko-fi / donation handle — set to light up the landing-page tip box and the
+# metainfo <url type="donation">. Empty ⇒ the donation links are omitted.
+kofi_handle = ""
+
+# the 2×2 landing grid, also projected to the AppStream metainfo <ul>
+feature_cards = [
+  { title = "Frosted chrome", body = "A frameless, blurred, KDE-native window — rounded corners, a custom title bar, edge-resize and drag." },
+  { title = "Token-driven design", body = "One palette source with live re-theming, exported to JSON the app and the landing page share." },
+  { title = "Batteries, wired", body = "Single-instance, notifications, autostart and power inhibition — cross-platform and already plumbed." },
+  { title = "Fork and own", body = "Set your identity once. No upstream dependency, no framework lock-in — the code is yours." },
+]
+
+# Screenshots for the AppStream metainfo (≥1, first is type=default) + the
+# landing page + the store listings. Empty for now; the freedesktop renderer
+# (Beat 2) warns when a release ships none. Each: {path, caption, alt, width, height}.
+screenshots = []
+
+# Single-instance identity that must be TRACKED, never regenerated, and never
+# cross-contaminated between apps (docs/BAKING.md §9). `butterpdf bake <newapp>`
+# mints a fresh uuid4 for inno_appid_guid; the MSIX values are Partner-Center-
+# issued and left blank until the forker registers.
+[tool.butterpdf.metadata.store_secrets_of_record]
+# butterpdf's IMMUTABLE Inno installer identity — minted once (uuid4), never changed
+# (changing it orphans installed users from upgrades). A fork mints its own.
+inno_appid_guid = "52EF47E0-A608-479B-804B-6AF76AB57957"
+msix_publisher_cn = ""
+msix_pfn = ""
+msix_store_id = ""
+# Apple Developer Team ID; blank ⇒ the macOS cask/notary leg stays dormant
+# (docs/BAKING.md §9). Present so the metadata core already carries the mac
+# fields, per §5 — flipping macOS on needs no re-derivation.
+macos_team_id = ""
+
+[tool.setuptools_scm]
+# The tag is the version. setuptools-scm writes butterpdf/_version.py at build time
+# (gitignored; butterpdf.__init__ reads it with a graceful source-checkout
+# fallback). No tag yet ⇒ a dev version like 0.0.1.devN+gHASH; the first
+# `git tag v0.1.0` makes it concrete.
+version_file = "butterpdf/_version.py"
+fallback_version = "0.0.0"
+
+[tool.setuptools.packages.find]
+include = ["butterpdf*"]
+exclude = ["tests*", "docs*", "packaging*"]
+
+[tool.setuptools.package-data]
+# The brand SVG (butterpdf/assets/butterpdf.svg) ships in the wheel so make_app_icon
+# resolves it via importlib.resources.
+"butterpdf.assets" = ["*.svg"]
+
+[tool.pytest.ini_options]
+# GUI tests run headless — conftest.py forces QT_QPA_PLATFORM=offscreen before
+# any PySide6 import. xfail_strict makes the P0 contract self-enforcing: the
+# known stand-alone-safety failures are written as xfails now and flip to HARD
+# failures (forcing the marker's removal) the moment each fix lands.
+testpaths = ["tests"]
+xfail_strict = true
+addopts = "-ra"
+
+[tool.ruff]
+# Wrap by editorial judgment, not a hard column (E501 off below). 100 is just
+# the formatter's reflow target if anyone runs `ruff format` (we don't by default).
+line-length = 100
+
+[tool.ruff.lint]
+# E, F, I, B — the jellytoast house set. E501 (line length) and E402
+# (module-level lazy import, used to break import cycles / guard optional deps)
+# are intentionally off.
+select = ["E", "F", "I", "B"]
+ignore = ["E501", "E402"]

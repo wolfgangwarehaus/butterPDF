@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="butterPDF">
+  <!-- butterPDF brand mark — DRAFT (first pass from the spec; refine in Baking once
+       it can be rendered). A filled butter-yellow document with slightly rounded
+       corners, a folded top-right corner, and a tiny white shine. -->
+
+  <!-- the document body -->
+  <path d="M80 40 H146 L190 84 V202 A14 14 0 0 1 176 216 H80 A14 14 0 0 1 66 202 V54 A14 14 0 0 1 80 40 Z"
+        fill="#F3CE63"/>
+
+  <!-- the turned-back corner (underside of the fold), a paler cream -->
+  <path d="M146 40 L190 84 H146 Z" fill="#FBE9AE"/>
+
+  <!-- a tiny white highlight / butter shine -->
+  <path d="M86 74 Q98 64 112 70" fill="none" stroke="#FFFFFF" stroke-width="8"
+        stroke-linecap="round" opacity="0.9"/>
+</svg>
