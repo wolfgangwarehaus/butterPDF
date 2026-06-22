@@ -11,6 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import QPointF, Qt, Signal
+from PySide6.QtGui import QColor, QPalette
 from PySide6.QtPdf import QPdfDocument
 from PySide6.QtPdfWidgets import QPdfView
 from PySide6.QtWidgets import (
@@ -25,6 +26,7 @@ from PySide6.QtWidgets import (
 
 from butterpdf import ui_helpers
 from butterpdf.design_tokens import TYPE_BODY, TYPE_DISPLAY, type_qss
+from butterpdf.top_bar import CenteredBar
 
 _ZOOM_STEP = 1.25
 _ZOOM_MIN = 0.1
@@ -50,6 +52,7 @@ class PdfViewer(QWidget):
         self._view.setPageMode(QPdfView.PageMode.MultiPage)
         self._view.setZoomMode(QPdfView.ZoomMode.FitToWidth)
         self._nav = self._view.pageNavigator()
+        self._frost_view()
 
         self._empty = self._make_empty_state()
         self._stack = QStackedWidget(self)
@@ -78,6 +81,26 @@ class PdfViewer(QWidget):
         path, _ = QFileDialog.getOpenFileName(self, "Open PDF", "", "PDF documents (*.pdf)")
         if path:
             self.open_path(path)
+
+    def _frost_view(self) -> None:
+        """Let the window's frost show through the page gutters + margins instead of
+        QtPdf's default opaque grey — uniform frosted glass is a dough hallmark."""
+        view = self._view
+        view.setStyleSheet("QPdfView { background: transparent; border: none; }")
+        viewport = view.viewport()
+        viewport.setAutoFillBackground(False)
+        clear = QColor(0, 0, 0, 0)
+        pal = view.palette()
+        for role in (
+            QPalette.ColorRole.Base,
+            QPalette.ColorRole.Dark,
+            QPalette.ColorRole.Mid,
+            QPalette.ColorRole.Window,
+            QPalette.ColorRole.Button,
+        ):
+            pal.setColor(role, clear)
+        view.setPalette(pal)
+        viewport.setPalette(pal)
 
     # ── drag & drop ──────────────────────────────────────────────────────────
     def _dropped_pdf(self, event) -> str | None:
@@ -143,6 +166,9 @@ class PdfViewer(QWidget):
     def _update_page_label(self) -> None:
         count = self._doc.pageCount()
         self._page_label.setText(f"{self._nav.currentPage() + 1} / {count}" if count > 0 else "—")
+        footer = getattr(self, "_footer", None)
+        if isinstance(footer, CenteredBar):
+            footer.recenter()  # the page label changed width
 
     def _update_zoom_label(self) -> None:
         self._zoom_label.setText("Fit" if self._fit else f"{round(self._view.zoomFactor() * 100)}%")
@@ -168,27 +194,33 @@ class PdfViewer(QWidget):
         self._empty_sub.setText(text)
 
     def _make_footer(self) -> QWidget:
-        bar = QWidget()
+        bar = CenteredBar()
         bar.setStyleSheet("background: transparent;")
         row = QHBoxLayout(bar)
         row.setContentsMargins(14, 5, 14, 5)
         row.setSpacing(6)
         row.addStretch(1)
 
-        self._prev = self._tool("◀", lambda: self._go(-1))
-        self._page_label = self._label("—")
-        self._next = self._tool("▶", lambda: self._go(1))
-        row.addWidget(self._prev)
-        row.addWidget(self._page_label)
-        row.addWidget(self._next)
-        row.addStretch(1)
-
+        # zoom group — right-aligned in the normal layout
         self._zoom_out = self._tool("−", lambda: self._zoom_by(1 / _ZOOM_STEP))
         self._zoom_label = self._label("Fit")
         self._zoom_in = self._tool("+", lambda: self._zoom_by(_ZOOM_STEP))
         self._fit_btn = self._tool("Fit", self._fit_width)
         for control in (self._zoom_out, self._zoom_label, self._zoom_in, self._fit_btn):
             row.addWidget(control)
+
+        # page navigation — floats truly centered over the whole footer
+        nav = QWidget(bar)
+        nav_lay = QHBoxLayout(nav)
+        nav_lay.setContentsMargins(0, 0, 0, 0)
+        nav_lay.setSpacing(6)
+        self._prev = self._tool("◀", lambda: self._go(-1))
+        self._page_label = self._label("—")
+        self._next = self._tool("▶", lambda: self._go(1))
+        nav_lay.addWidget(self._prev)
+        nav_lay.addWidget(self._page_label)
+        nav_lay.addWidget(self._next)
+        bar.set_centered(nav)
         return bar
 
     def _label(self, text: str) -> QLabel:

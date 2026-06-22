@@ -1,9 +1,9 @@
 """TopBar — butterPDF's top bar, which doubles as the titlebar in borderless mode.
 
 Left: a document menu (Open / Edit / Sign). Center: the app name + the open
-document's name. Right: settings + the minimize / maximize / close window controls.
-Dragging the bar moves the window (``startSystemMove``); double-click toggles maximize.
-An app subclasses or replaces this freely — it only needs ``restyle()``.
+document's name — TRULY centered over the window (via :class:`CenteredBar`), not just
+between the side groups. Right: settings + minimize / maximize / close. Dragging the
+bar moves the window; double-click toggles maximize.
 """
 
 from __future__ import annotations
@@ -18,7 +18,35 @@ from butterpdf.icon_button import IconButton
 from butterpdf.icons import icon
 
 
-class TopBar(QWidget):
+class CenteredBar(QWidget):
+    """A horizontal bar that keeps ONE child truly centered over the full bar width —
+    not merely between its side groups — and re-centers it on every resize. Side
+    content lives in the normal layout; the centered child floats on top. This is the
+    "balanced regardless of what's on the sides" behaviour a polished titlebar wants.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._centered: QWidget | None = None
+
+    def set_centered(self, widget: QWidget) -> None:
+        self._centered = widget
+        self.recenter()
+
+    def recenter(self) -> None:
+        c = self._centered
+        if c is None:
+            return
+        c.adjustSize()
+        c.move(max(0, (self.width() - c.width()) // 2), max(0, (self.height() - c.height()) // 2))
+        c.raise_()
+
+    def resizeEvent(self, event):  # noqa: N802 (Qt override)
+        super().resizeEvent(event)
+        self.recenter()
+
+
+class TopBar(CenteredBar):
     HEIGHT = 40
 
     def __init__(self, window, *, titlebar_mode: bool, title: str = "butterpdf"):
@@ -39,19 +67,10 @@ class TopBar(QWidget):
         lay.addWidget(self.menu_btn)
         lay.addStretch(1)
 
-        # ── center: app name + the open document ───────────────────────────
-        self.title = QLabel(title)
-        self.doc_label = QLabel("")
-        self.doc_label.hide()
-        lay.addWidget(self.title)
-        lay.addWidget(self.doc_label)
-        lay.addStretch(1)
-
         # ── right: settings + window controls ──────────────────────────────
         self.settings_btn = self._chrome_button("settings", "Settings")
         self.settings_btn.clicked.connect(lambda: AppBus.get().show_settings.emit())
         lay.addWidget(self.settings_btn)
-
         if titlebar_mode:
             self.min_btn = self._chrome_button("win_minimize", "Minimize")
             self.min_btn.clicked.connect(window.showMinimized)
@@ -61,6 +80,19 @@ class TopBar(QWidget):
             self.close_btn.clicked.connect(window.close)
             for b in (self.min_btn, self.max_btn, self.close_btn):
                 lay.addWidget(b)
+
+        # ── center: app name + open document — floats, truly centered ──────
+        self._center = QWidget(self)
+        self._center.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)  # drag passes through
+        center_lay = QHBoxLayout(self._center)
+        center_lay.setContentsMargins(0, 0, 0, 0)
+        center_lay.setSpacing(8)
+        self.title = QLabel(title)
+        self.doc_label = QLabel("")
+        self.doc_label.hide()
+        center_lay.addWidget(self.title)
+        center_lay.addWidget(self.doc_label)
+        self.set_centered(self._center)
 
         self.restyle()
 
@@ -77,6 +109,7 @@ class TopBar(QWidget):
         else:
             self.doc_label.clear()
             self.doc_label.hide()
+        self.recenter()  # the centered group changed width
 
     def _show_menu(self) -> None:
         menu = QMenu(self)
@@ -102,6 +135,7 @@ class TopBar(QWidget):
         """Re-read theme colors (call on AppBus.theme_changed) + refresh icons."""
         self.title.setStyleSheet(f"color: {ui_helpers.TEXT}; {type_qss(TYPE_SUBHEAD)}")
         self.doc_label.setStyleSheet(f"color: {ui_helpers.TEXT_DIM}; {type_qss(TYPE_BODY)}")
+        self.recenter()
         for name, btn in (
             ("menu", getattr(self, "menu_btn", None)),
             ("settings", getattr(self, "settings_btn", None)),
