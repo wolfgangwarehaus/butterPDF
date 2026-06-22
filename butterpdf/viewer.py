@@ -54,10 +54,13 @@ class PdfViewer(QWidget):
         self._view.setZoomMode(QPdfView.ZoomMode.FitToWidth)
         self._nav = self._view.pageNavigator()
         self._frost_view()
-        # Bezels the width of the scrollbar pill: the left margin equals the scrollbar's
-        # 8px lane, and the right margin is 0 so that lane IS the right bezel — the slim
-        # accent pill fills it, and the left gutter mirrors it. Snug, not chunky.
-        self._view.setDocumentMargins(QMargins(8, 10, 0, 10))
+        # EVEN bezels the width of the scrollbar pill. The vertical scrollbar reserves
+        # its 8px lane on the right only, which QtPdf would otherwise add to the right
+        # gutter alone (right looked bigger). Mirror it with an 8px viewport margin on
+        # the LEFT, and let the page fill the rest (doc margins 0) — both sides then read
+        # as a matching 8px frosted strip, with the accent pill centered in the right.
+        self._view.setViewportMargins(8, 0, 0, 0)
+        self._view.setDocumentMargins(QMargins(0, 10, 0, 10))
         self._view.setPageSpacing(10)
         if get_settings().auto_hide_scrollbars:
             ui_helpers.install_autofade_scrollbars(self._view)
