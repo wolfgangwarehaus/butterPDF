@@ -1754,10 +1754,11 @@ class AutoFadeScrollBar(QScrollBar):
 
     IDLE_MS = 900  # how long the pill stays visible after the last interaction
     FADE_MS = 220  # cross-fade duration
-    PILL_ALPHA = 150  # peak alpha of the handle (0-255)
+    PILL_ALPHA = 190  # peak alpha of the handle (0-255) — bright enough to read
     PILL_RADIUS = 3
     PILL_INSET = 2  # px shrink on the LONG axis for breathing room at the ends
     PILL_THICKNESS = 6  # cross-axis width — a slim pill centered in the lane
+    PILL_MIN_LENGTH = 44  # min long-axis length so the pill stays long + grabbable
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1820,11 +1821,19 @@ class AutoFadeScrollBar(QScrollBar):
         # thin slick bar rather than a chunky block flush to the edge.
         if self.orientation() == Qt.Orientation.Vertical:
             handle.adjust(0, self.PILL_INSET, 0, -self.PILL_INSET)
+            if handle.height() < self.PILL_MIN_LENGTH:  # keep it long on big docs
+                cy0 = handle.center().y()
+                handle.setTop(cy0 - self.PILL_MIN_LENGTH // 2)
+                handle.setHeight(self.PILL_MIN_LENGTH)
             cx = self.width() // 2  # the widget's true center, not the (inset) handle's
             handle.setLeft(cx - self.PILL_THICKNESS // 2)
             handle.setWidth(self.PILL_THICKNESS)
         else:
             handle.adjust(self.PILL_INSET, 0, -self.PILL_INSET, 0)
+            if handle.width() < self.PILL_MIN_LENGTH:
+                cx0 = handle.center().x()
+                handle.setLeft(cx0 - self.PILL_MIN_LENGTH // 2)
+                handle.setWidth(self.PILL_MIN_LENGTH)
             cy = self.height() // 2
             handle.setTop(cy - self.PILL_THICKNESS // 2)
             handle.setHeight(self.PILL_THICKNESS)
@@ -1833,7 +1842,7 @@ class AutoFadeScrollBar(QScrollBar):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setPen(Qt.PenStyle.NoPen)
         # Brighter on hover so the pill answers cursor presence.
-        peak = 220 if self._hovered else self.PILL_ALPHA
+        peak = 255 if self._hovered else self.PILL_ALPHA
         # Scale alpha down by the current handleAlpha fraction.
         alpha = int(peak * (self._handle_alpha / 255))
         # The live app ACCENT so the scrollbar carries the accent colour.
