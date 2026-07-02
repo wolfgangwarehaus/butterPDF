@@ -133,6 +133,16 @@ class TopBar(CenteredBar):
         flatten.triggered.connect(lambda: self._viewer.save_as(flatten=True))
 
         menu.addSeparator()
+        export_png = menu.addAction("Export pages as PNG…")
+        export_png.setEnabled(can_edit)
+        export_png.triggered.connect(lambda: self._viewer.export_images("png"))
+        export_jpg = menu.addAction("Export pages as JPEG…")
+        export_jpg.setEnabled(can_edit)
+        export_jpg.triggered.connect(lambda: self._viewer.export_images("jpeg"))
+        make_pdf = menu.addAction("Create PDF from images…")
+        make_pdf.triggered.connect(lambda: self._viewer.images_to_pdf())
+
+        menu.addSeparator()
         soon = menu.addAction("Edit  (soon)")
         soon.setEnabled(False)  # MVP fast-follow
         menu.exec(self.menu_btn.mapToGlobal(self.menu_btn.rect().bottomLeft()))

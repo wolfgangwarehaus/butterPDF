@@ -148,6 +148,47 @@ class PdfViewer(QWidget):
             page.add_field(widget, fld.rect)
             self._field_widgets.append(widget)
 
+    # ── converters ───────────────────────────────────────────────────────────
+    def export_images(self, fmt: str = "png") -> None:
+        """Render every page to PNG/JPEG in a chosen folder."""
+        if not self.can_edit():
+            return
+        from pathlib import Path
+
+        from butterpdf import convert
+        from butterpdf.frosted_dialog import frosted_info, frosted_warning
+
+        folder = QFileDialog.getExistingDirectory(self, "Export pages to folder")
+        if not folder:
+            return
+        stem = Path(self._path).stem if self._path else "page"
+        try:
+            written = convert.export_pdf_images(self._doc, folder, stem, fmt=fmt)
+            frosted_info(self, "Exported", f"{len(written)} page(s) → {folder}")
+        except Exception as exc:
+            frosted_warning(self, "Export failed", str(exc))
+
+    def images_to_pdf(self) -> None:
+        """Combine chosen images into a new PDF (one page each)."""
+        from butterpdf import convert
+        from butterpdf.frosted_dialog import frosted_info, frosted_warning
+
+        paths, _ = QFileDialog.getOpenFileNames(
+            self, "Choose images", "", "Images (*.png *.jpg *.jpeg *.bmp *.tif *.tiff)"
+        )
+        if not paths:
+            return
+        dest, _ = QFileDialog.getSaveFileName(self, "Save PDF", "images.pdf", "PDF documents (*.pdf)")
+        if not dest:
+            return
+        if not dest.lower().endswith(".pdf"):
+            dest += ".pdf"
+        try:
+            convert.images_to_pdf(paths, dest)
+            frosted_info(self, "Created", f"{len(paths)} image(s) → {dest}")
+        except Exception as exc:
+            frosted_warning(self, "Couldn't create PDF", str(exc))
+
     # ── signatures ───────────────────────────────────────────────────────────
     def can_edit(self) -> bool:
         return self._doc.status() == QPdfDocument.Status.Ready and self._doc.pageCount() > 0

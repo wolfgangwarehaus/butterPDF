@@ -54,6 +54,8 @@ dependencies = [
     "pypdf>=4.0",
     # pikepdf (QPDF) composites signatures into the page as image XObjects on save.
     "pikepdf>=8",
+    # img2pdf losslessly embeds images into a PDF (the images→PDF converter).
+    "img2pdf>=0.5",
 ]
 
 [project.optional-dependencies]
