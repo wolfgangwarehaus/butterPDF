@@ -101,6 +101,17 @@ class PdfViewer(QWidget):
         self._apply_document_display()
         self._refresh()
 
+        # Ctrl+S save (over the open file) / Ctrl+Shift+S save-as. App-wide so it
+        # fires regardless of which field has focus.
+        from PySide6.QtGui import QKeySequence, QShortcut
+
+        save_sc = QShortcut(QKeySequence.StandardKey.Save, self)
+        save_sc.setContext(Qt.ShortcutContext.ApplicationShortcut)
+        save_sc.activated.connect(self.save)
+        save_as_sc = QShortcut(QKeySequence("Ctrl+Shift+S"), self)
+        save_as_sc.setContext(Qt.ShortcutContext.ApplicationShortcut)
+        save_as_sc.activated.connect(lambda: self.save_as())
+
     # ── public ───────────────────────────────────────────────────────────────
     def controls(self) -> QWidget:
         """The control bar, for ``window.set_footer(...)``."""
@@ -137,6 +148,65 @@ class PdfViewer(QWidget):
                 continue
             page.add_field(widget, fld.rect)
             self._field_widgets.append(widget)
+
+    # ── form save ──────────────────────────────────────────────────────────
+    def has_form(self) -> bool:
+        return bool(getattr(self, "_field_widgets", None))
+
+    def _collect_values(self) -> dict:
+        """Current field values keyed by field name: text/choice as strings, a
+        checkbox/radio as its on-state name (``/Yes``) or ``/Off``."""
+        from butterpdf.form_layer import field_value
+
+        values = {}
+        for widget in getattr(self, "_field_widgets", ()):
+            fld = getattr(widget, "_field", None)
+            if fld is None:
+                continue
+            val = field_value(widget)
+            if fld.kind in ("checkbox", "radio"):
+                values[fld.name] = "/" + (val or "Off")
+            else:
+                values[fld.name] = val if val is not None else ""
+        return values
+
+    def save_document(self, dest_path: str, *, flatten: bool = False) -> None:
+        """Write the filled form to ``dest_path`` (regenerated appearance streams).
+        Raises on failure — the caller surfaces it."""
+        from butterpdf.pdf_save import save_filled
+
+        save_filled(self._path or "", dest_path, self._collect_values(), flatten=flatten)
+
+    def save(self) -> None:
+        """Save over the currently-open file (atomic). No-op without a document."""
+        if self._path:
+            self._save_to(self._path)
+
+    def save_as(self, *, flatten: bool = False) -> None:
+        """Prompt for a destination and save (optionally flattened for sending)."""
+        if not self._path:
+            return
+        from pathlib import Path
+
+        stem = Path(self._path).stem
+        suffix = "-flattened" if flatten else "-filled"
+        suggested = str(Path(self._path).with_name(f"{stem}{suffix}.pdf"))
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save PDF", suggested, "PDF documents (*.pdf)"
+        )
+        if not path:
+            return
+        if not path.lower().endswith(".pdf"):
+            path += ".pdf"
+        self._save_to(path, flatten=flatten)
+
+    def _save_to(self, path: str, *, flatten: bool = False) -> None:
+        from butterpdf.frosted_dialog import frosted_warning
+
+        try:
+            self.save_document(path, flatten=flatten)
+        except Exception as exc:  # surface, never crash
+            frosted_warning(self, "Couldn't save", f"Saving the PDF failed:\n{exc}")
 
     def _refresh_field_marks(self) -> None:
         """Re-read the checkbox-mark setting on the form's checkboxes (live)."""

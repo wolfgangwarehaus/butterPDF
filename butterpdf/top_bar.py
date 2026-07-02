@@ -114,6 +114,19 @@ class TopBar(CenteredBar):
     def _show_menu(self) -> None:
         menu = ui_helpers.opaque_menu(self, blur_corner_radius=8)  # frosted, readable
         menu.addAction("Open…").triggered.connect(self._open)
+
+        has_form = self._viewer is not None and self._viewer.has_form()
+        menu.addSeparator()
+        save = menu.addAction("Save")
+        save.setEnabled(has_form)
+        save.triggered.connect(lambda: self._viewer.save())
+        save_as = menu.addAction("Save As…")
+        save_as.setEnabled(has_form)
+        save_as.triggered.connect(lambda: self._viewer.save_as())
+        flatten = menu.addAction("Flatten && Save As…")  # && = literal & in Qt menus
+        flatten.setEnabled(has_form)
+        flatten.triggered.connect(lambda: self._viewer.save_as(flatten=True))
+
         menu.addSeparator()
         for label in ("Edit", "Sign"):
             soon = menu.addAction(f"{label}  (soon)")
