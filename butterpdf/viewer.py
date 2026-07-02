@@ -79,10 +79,8 @@ class PdfViewer(QWidget):
         # overlay widgets, which QPdfView doesn't expose. The frost, even 8px
         # gutters, and 10px page spacing live in RenderedPdfView.
         self._doc = QPdfDocument(self)
-        self._view = RenderedPdfView(self)
+        self._view = RenderedPdfView(self)  # installs its own slim auto-fade scrollbar
         self._view.set_document(self._doc)
-        if get_settings().auto_hide_scrollbars:
-            ui_helpers.install_autofade_scrollbars(self._view)
 
         self._empty = self._make_empty_state()
         self._stack = QStackedWidget(self)
@@ -99,6 +97,7 @@ class PdfViewer(QWidget):
         # The page paper follows the app theme (+ the frosted-document setting), and
         # re-applies live when either changes — theme_changed carries both.
         AppBus.get().theme_changed.connect(self._apply_document_display)
+        AppBus.get().theme_changed.connect(self._refresh_field_marks)
         self._apply_document_display()
         self._refresh()
 
@@ -138,6 +137,12 @@ class PdfViewer(QWidget):
                 continue
             page.add_field(widget, fld.rect)
             self._field_widgets.append(widget)
+
+    def _refresh_field_marks(self) -> None:
+        """Re-read the checkbox-mark setting on the form's checkboxes (live)."""
+        for widget in getattr(self, "_field_widgets", ()):
+            if hasattr(widget, "refresh_mark"):
+                widget.refresh_mark()
 
     def _apply_document_display(self) -> None:
         """Resolve the page paper + recolor from the 'Document background' setting

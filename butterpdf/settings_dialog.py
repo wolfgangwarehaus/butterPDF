@@ -71,6 +71,16 @@ class SettingsDialog(FrostedDialog):
         self.doc_bg_sel.currentIndexChanged.connect(self._on_document_bg)
         self.content_layout.addWidget(self.doc_bg_sel)
 
+        # Checkbox mark — how a ticked form checkbox is stamped (✓ or ✕). Live.
+        self.content_layout.addWidget(self._label("CHECKBOX MARK"))
+        self.check_mark_sel = Selector()
+        self.check_mark_sel.addItem("Check  ✓", "check")
+        self.check_mark_sel.addItem("Cross  ✕", "cross")
+        self._select(self.check_mark_sel, self.s.checkbox_mark)
+        self.check_mark_sel.setFixedWidth(256)
+        self.check_mark_sel.currentIndexChanged.connect(self._on_checkbox_mark)
+        self.content_layout.addWidget(self.check_mark_sel)
+
         self.content_layout.addWidget(self._label("ACCENT COLOR"))
         self.content_layout.addLayout(self._accent_row())
 
@@ -207,4 +217,9 @@ class SettingsDialog(FrostedDialog):
         self.s.document_bg = self.doc_bg_sel.currentData()
         # theme_changed re-applies the viewer's page paper (PdfViewer reads the
         # setting + theme live in _apply_document_display) — no restart.
+        AppBus.get().theme_changed.emit()
+
+    def _on_checkbox_mark(self, _idx: int) -> None:
+        self.s.checkbox_mark = self.check_mark_sel.currentData()
+        # theme_changed → the viewer re-reads the mark on its checkbox fields.
         AppBus.get().theme_changed.emit()

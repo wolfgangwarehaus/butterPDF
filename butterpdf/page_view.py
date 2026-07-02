@@ -235,12 +235,24 @@ class RenderedPdfView(QScrollArea):
 
         self._canvas = QWidget()
         self._vbox = QVBoxLayout(self._canvas)
-        self._vbox.setContentsMargins(_GUTTER, 0, _GUTTER, 0)
+        self._vbox.setContentsMargins(0, 0, 0, 0)
         self._vbox.setSpacing(_PAGE_SPACING)
         self._vbox.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         self.setWidget(self._canvas)
+        # 8px LEFT frosted gutter; the slim auto-fade scrollbar is the matching
+        # right gutter (as the old QtPdf layout did) — thin, symmetric edges. A
+        # symmetric canvas margin PLUS the scrollbar's own lane made the right
+        # gutter fat, which is what we're undoing here.
+        self.setViewportMargins(_GUTTER, 0, 0, 0)
 
         self._frost()
+        # Install the slim accent auto-fade scrollbar HERE (before wiring scroll
+        # tracking) so valueChanged binds to the FINAL bar, not the replaced one.
+        from butterpdf import ui_helpers
+        from butterpdf.settings import get_settings
+
+        if get_settings().auto_hide_scrollbars:
+            ui_helpers.install_autofade_scrollbars(self)
         self.verticalScrollBar().valueChanged.connect(self._on_scroll)
 
     # ── public API (the slice PdfViewer uses) ─────────────────────────────
@@ -328,7 +340,9 @@ class RenderedPdfView(QScrollArea):
         """The zoom that fits the widest page to the viewport width (minus gutters)."""
         if not self._pages:
             return 1.0
-        avail = self.viewport().width() - 2 * _GUTTER
+        # viewport() already excludes the 8px left margin + the scrollbar lane, so
+        # a page filling it sits between the left gutter and the scrollbar gutter.
+        avail = self.viewport().width()
         widest_pt = max(p._pt_size.width() for p in self._pages)
         if widest_pt <= 0:
             return 1.0

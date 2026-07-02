@@ -10,9 +10,38 @@ the save step, and ``.value_str()`` reads the current widget value uniformly.
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QCheckBox, QComboBox, QLineEdit, QWidget
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QComboBox, QLineEdit, QPushButton, QWidget
 
 from butterpdf import ui_helpers
+
+
+class CheckField(QPushButton):
+    """A checkable box that stamps a mark when checked — a ✓ or ✕ per the
+    ``checkbox_mark`` setting (how people fill a paper checkbox), not a plain
+    fill. Call :meth:`refresh_mark` to re-read the setting live."""
+
+    def __init__(self, field) -> None:
+        super().__init__()
+        self._field = field
+        self.setCheckable(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setChecked(bool(field.on_value) and field.value == field.on_value)
+        self.setStyleSheet(_check_qss())
+        self.toggled.connect(lambda _on: self.refresh_mark())
+        self.refresh_mark()
+
+    def refresh_mark(self) -> None:
+        from butterpdf.settings import get_settings
+
+        mark = "✕" if get_settings().checkbox_mark == "cross" else "✓"  # ✕ / ✓
+        self.setText(mark if self.isChecked() else "")
+
+    def resizeEvent(self, e) -> None:  # noqa: N802 (Qt override)
+        super().resizeEvent(e)
+        f = self.font()  # size the glyph to the box
+        f.setPixelSize(max(6, int(self.height() * 0.78)))
+        self.setFont(f)
 
 
 def _text_qss() -> str:
@@ -28,10 +57,9 @@ def _text_qss() -> str:
 def _check_qss() -> str:
     a = ui_helpers.ACCENT
     return (
-        f"QCheckBox{{background:transparent;}}"
-        f"QCheckBox::indicator{{width:100%;height:100%;border:1px solid {a};"
-        f"border-radius:2px;background:rgba(255,255,255,0.94);}}"
-        f"QCheckBox::indicator:checked{{background:{a};}}"
+        f"QPushButton{{background:rgba(255,255,255,0.94);border:1px solid {a};"
+        f"border-radius:2px;color:{a};font-weight:bold;padding:0;}}"
+        f"QPushButton:disabled{{background:rgba(255,255,255,0.55);color:#888;}}"
     )
 
 
@@ -51,9 +79,7 @@ def make_field_widget(field) -> QWidget | None:
         w: QWidget = QLineEdit(field.value)
         w.setStyleSheet(_text_qss())
     elif field.kind in ("checkbox", "radio"):
-        w = QCheckBox()
-        w.setChecked(bool(field.on_value) and field.value == field.on_value)
-        w.setStyleSheet(_check_qss())
+        w = CheckField(field)
     elif field.kind == "choice":
         w = QComboBox()
         w.addItems(field.options or [])
@@ -79,7 +105,7 @@ def field_value(widget: QWidget):
         return widget.text()
     if isinstance(widget, QComboBox):
         return widget.currentText()
-    if isinstance(widget, QCheckBox):
+    if isinstance(widget, CheckField):
         on = getattr(field, "on_value", None) or "Yes"
         return on if widget.isChecked() else "Off"
     return None
