@@ -119,10 +119,29 @@ class PageWidget(QWidget):
         self._paper: QColor | None = _PAPER
         self._recolor: tuple[bool, int, int] | None = None  # (invert, floor, ceil)
         self._boxes_provider = None  # callable(index) -> [image boxes in points]
+        self._fields: list[tuple] = []  # (widget, rect_pt) overlays anchored to the page
         # Opaque only when the paper fully covers the widget (an opaque fill) — a
         # translucent/None paper must let the frost show through.
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
         self._apply_size()
+
+    # ── field overlays ──────────────────────────────────────────────────────
+    def add_field(self, widget: QWidget, rect_pt: tuple) -> None:
+        """Anchor an editable ``widget`` over a PDF rect (points, bottom-left
+        origin). It becomes a child, so it scrolls + re-places with the page."""
+        widget.setParent(self)
+        self._fields.append((widget, rect_pt))
+        self._place_field(widget, rect_pt)
+        widget.show()
+
+    def _place_field(self, widget: QWidget, rect_pt: tuple) -> None:
+        x0, y0, x1, y1 = rect_pt
+        left, top = self.pt_to_px(x0, y1)      # y1 = the rect's upper edge
+        right, bottom = self.pt_to_px(x1, y0)
+        widget.setGeometry(
+            round(left), round(top),
+            max(1, round(right - left)), max(1, round(bottom - top)),
+        )
 
     def set_display(self, paper: QColor | None, recolor_args: tuple | None) -> None:
         """Set the paper behind the content + how to recolor the page.
@@ -153,6 +172,8 @@ class PageWidget(QWidget):
         w = max(1, round(self._pt_size.width() * self._scale))
         h = max(1, round(self._pt_size.height() * self._scale))
         self.setFixedSize(w, h)
+        for widget, rect_pt in getattr(self, "_fields", ()):  # re-place on zoom
+            self._place_field(widget, rect_pt)
 
     def pt_to_px(self, x_pt: float, y_pt: float) -> tuple[float, float]:
         """Map a PDF point (origin bottom-left) to a page pixel (origin top-left)

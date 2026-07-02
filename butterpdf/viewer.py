@@ -121,6 +121,24 @@ class PdfViewer(QWidget):
         if path:
             self.open_path(path)
 
+    def _build_form_fields(self) -> None:
+        """Read the AcroForm fields and float an editable widget over each, on its
+        page, so they can be filled in place. Best-effort — a doc with no fields
+        (or an unreadable form) simply adds nothing."""
+        from butterpdf.form_layer import make_field_widget
+        from butterpdf.pdf_forms import read_fields
+
+        self._field_widgets = []
+        for fld in read_fields(self._path or ""):
+            page = self._view.page_widget(fld.page_index)
+            if page is None:
+                continue
+            widget = make_field_widget(fld)
+            if widget is None:
+                continue
+            page.add_field(widget, fld.rect)
+            self._field_widgets.append(widget)
+
     def _apply_document_display(self) -> None:
         """Resolve the page paper + recolor from the 'Document background' setting
         (which may follow the app theme) and push it to the view."""
@@ -170,6 +188,7 @@ class PdfViewer(QWidget):
             images = getattr(self, "_images", None)
             if images is not None:
                 self._view.set_image_boxes(images.boxes_pt)
+            self._build_form_fields()
             self._stack.setCurrentWidget(self._view)
             self.document_changed.emit(Path(self._path).name if self._path else "")
         elif status == QPdfDocument.Status.Error:
