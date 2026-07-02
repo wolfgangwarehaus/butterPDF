@@ -9,7 +9,6 @@ from __future__ import annotations
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QColor, QImage, QPainter, QPen
 from PySide6.QtWidgets import (
-    QComboBox,
     QFileDialog,
     QHBoxLayout,
     QLabel,
@@ -23,6 +22,7 @@ from PySide6.QtWidgets import (
 from butterpdf import signature, ui_helpers
 from butterpdf.design_tokens import BTN_PRIMARY, TYPE_BODY, button_qss, type_qss
 from butterpdf.frosted_dialog import FrostedDialog
+from butterpdf.selector import Selector, selector_qss
 
 _INK = QColor(20, 24, 40)
 
@@ -37,6 +37,14 @@ class InkCanvas(QWidget):
         self._img.fill(Qt.GlobalColor.transparent)
         self._last: QPoint | None = None
         self._drawn = False
+        self._pen_width = 2.6
+        self._ink = QColor(_INK)
+
+    def set_pen_width(self, w: float) -> None:
+        self._pen_width = max(0.5, float(w))
+
+    def set_ink(self, color: QColor) -> None:
+        self._ink = QColor(color)
 
     def resizeEvent(self, e) -> None:  # noqa: N802
         new = QImage(self.size(), QImage.Format.Format_ARGB32)
@@ -55,7 +63,7 @@ class InkCanvas(QWidget):
             return
         p = QPainter(self._img)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        pen = QPen(_INK, 2.6)
+        pen = QPen(self._ink, self._pen_width)
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
         pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
         p.setPen(pen)
@@ -97,6 +105,7 @@ class SignatureDialog(FrostedDialog):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent, title="Signature", icon_name="edit", min_width=560)
         self.setModal(True)
+        self.setStyleSheet(self.styleSheet() + selector_qss())  # legible dropdowns
         self._result: QImage | None = None
         self._imported: QImage | None = None
 
@@ -120,12 +129,35 @@ class SignatureDialog(FrostedDialog):
         dl = QVBoxLayout(draw)
         dl.setContentsMargins(0, 0, 0, 0)
         dl.addWidget(self._canvas)
+
+        # pen controls: thickness slider + colour swatches (+ custom) + Clear
+        from PySide6.QtWidgets import QSlider
+
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        thin = QLabel("Pen")
+        thin.setStyleSheet(f"color:{ui_helpers.TEXT}; {type_qss(TYPE_BODY)}")
+        row.addWidget(thin)
+        self._pen_slider = QSlider(Qt.Orientation.Horizontal)
+        self._pen_slider.setRange(1, 12)
+        self._pen_slider.setValue(3)
+        self._pen_slider.setFixedWidth(120)
+        self._pen_slider.valueChanged.connect(self._canvas.set_pen_width)
+        row.addWidget(self._pen_slider)
+        for hex_ in ("#141828", "#000000", "#1a4fd0", "#c62828", "#1b7f3b"):
+            row.addWidget(self._colour_swatch(hex_))
+        custom = QPushButton("…")
+        custom.setToolTip("Custom colour")
+        custom.setFixedSize(24, 24)
+        custom.setStyleSheet(self._mode_qss())
+        custom.setCursor(Qt.CursorShape.PointingHandCursor)
+        custom.clicked.connect(self._pick_ink)
+        row.addWidget(custom)
+        row.addStretch(1)
         clear = QPushButton("Clear")
         clear.setStyleSheet(self._mode_qss())
         clear.setCursor(Qt.CursorShape.PointingHandCursor)
         clear.clicked.connect(self._canvas.clear)
-        row = QHBoxLayout()
-        row.addStretch(1)
         row.addWidget(clear)
         dl.addLayout(row)
         self._stack.addWidget(draw)
@@ -140,10 +172,12 @@ class SignatureDialog(FrostedDialog):
             f"QLineEdit{{background:rgba(255,255,255,0.94);border:1px solid {ui_helpers.ACCENT};"
             f"border-radius:4px;color:#111;padding:6px 8px;{type_qss(TYPE_BODY)}}}"
         )
-        self._type_font = QComboBox()
-        self._type_font.setStyleSheet(self._mode_qss())
+        from PySide6.QtGui import QFont
+
+        self._type_font = Selector()
+        self._type_font.setFixedWidth(240)
         for fam in self._script_fonts():
-            self._type_font.addItem(fam, fam)
+            self._type_font.addItem(fam, fam, font=QFont(fam))  # preview in-face
         self._type_preview = QLabel()
         self._type_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._type_preview.setMinimumHeight(150)
@@ -247,6 +281,26 @@ class SignatureDialog(FrostedDialog):
         found = [f for f in wanted if f in installed]
         # Fall back to any serif so Type always works; italic sells the signature look.
         return found or ["Z003", "DejaVu Serif", "Serif"]
+
+    # ── draw controls ─────────────────────────────────────────────────────
+    def _colour_swatch(self, hex_: str) -> QPushButton:
+        b = QPushButton()
+        b.setFixedSize(22, 22)
+        b.setCursor(Qt.CursorShape.PointingHandCursor)
+        b.setToolTip(hex_)
+        b.setStyleSheet(
+            f"QPushButton{{background:{hex_};border:1px solid rgba(0,0,0,0.35);"
+            f"border-radius:11px;}}QPushButton:hover{{border:2px solid {ui_helpers.ACCENT};}}"
+        )
+        b.clicked.connect(lambda _=False, h=hex_: self._canvas.set_ink(QColor(h)))
+        return b
+
+    def _pick_ink(self) -> None:
+        from PySide6.QtWidgets import QColorDialog
+
+        c = QColorDialog.getColor(self._canvas._ink, self, "Pen colour")
+        if c.isValid():
+            self._canvas.set_ink(c)
 
     # ── import ────────────────────────────────────────────────────────────
     def _pick_image(self) -> None:
