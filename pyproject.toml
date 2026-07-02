@@ -43,9 +43,15 @@ classifiers = [
 # duplicated into the sidecar. The Beat-2 renderer projects it onward (AUR
 # depends, deb shlib closure, AppImage bundling) from this list.
 dependencies = [
-    # Core is PySide6 only — that's the whole point. Cap below Qt 7 (a hard
-    # compat break); floor at the earliest API the chrome relies on.
+    # PySide6 (incl. QtPdf/PDFium) — the chrome + the render engine. Cap below
+    # Qt 7 (a hard compat break); floor at the earliest API the chrome relies on.
     "PySide6>=6.6.0,<7.0",
+    # NumPy powers the document-background recolor (smart invert / dark modes) —
+    # fast, vectorised per-pixel work over a rendered page.
+    "numpy>=1.24",
+    # pypdf reads image placements (dark mode leaves photos natural) and — the
+    # coming fill/save work — AcroForm fields. BSD-3, pure-Python.
+    "pypdf>=4.0",
 ]
 
 [project.optional-dependencies]

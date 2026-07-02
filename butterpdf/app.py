@@ -239,10 +239,21 @@ def run_app(content_factory, *, identity=None, single_instance=True) -> int:
     get_settings().restore_geometry(win)  # no-op if nothing saved → keeps default
     win.set_content(content_factory(win))
 
+    # Settings is non-modal + shown (not exec'd) so the document stays live while
+    # it's open — scroll the PDF, watch theme/background changes apply. One reused
+    # instance, raised if already open.
+    _settings_holder: dict = {}
+
     def _open_settings():
         from butterpdf.settings_dialog import SettingsDialog
 
-        SettingsDialog(win).exec()
+        dlg = _settings_holder.get("dlg")
+        if dlg is None:
+            dlg = SettingsDialog(win)
+            _settings_holder["dlg"] = dlg
+        dlg.show()
+        dlg.raise_()
+        dlg.activateWindow()
 
     AppBus.get().show_settings.connect(_open_settings)
 

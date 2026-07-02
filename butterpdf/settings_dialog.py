@@ -20,6 +20,7 @@ from butterpdf.frosted_dialog import FrostedDialog
 from butterpdf.selector import Selector, selector_qss
 from butterpdf.settings import get_settings
 from butterpdf.theme import ACCENT_PRESETS
+from butterpdf.viewer import DOC_BG_OPTIONS
 
 _THEME_MODES = [
     ("Auto (follow OS)", "auto"),
@@ -39,6 +40,11 @@ _FONT_SIZES = [
 class SettingsDialog(FrostedDialog):
     def __init__(self, parent=None):
         super().__init__(parent, title="Settings", icon_name="settings", min_width=420)
+        # Non-modal (the FrostedDialog base is modal for alerts): the document
+        # stays interactive so you can scroll to different parts and watch theme /
+        # document-background changes apply live — and the compositor doesn't dim
+        # the blocked parent.
+        self.setModal(False)
         self.s = get_settings()
         # Merge the Selector QSS into the dialog's sheet so the dropdowns style.
         self.setStyleSheet(self.styleSheet() + selector_qss())
@@ -51,6 +57,19 @@ class SettingsDialog(FrostedDialog):
         self.theme_sel.setFixedWidth(256)
         self.theme_sel.currentIndexChanged.connect(self._on_theme_mode)
         self.content_layout.addWidget(self.theme_sel)
+
+        # Document background — the PDF page paper: Auto follows the app theme; the
+        # dark modes invert + re-level the page while keeping images natural;
+        # Transparent is the frosted see-through look. Applies live. Sits right
+        # under Theme since it's the other big look control.
+        self.content_layout.addWidget(self._label("DOCUMENT BACKGROUND"))
+        self.doc_bg_sel = Selector()
+        for value, label in DOC_BG_OPTIONS:
+            self.doc_bg_sel.addItem(label, value)
+        self._select(self.doc_bg_sel, self.s.document_bg)
+        self.doc_bg_sel.setFixedWidth(256)
+        self.doc_bg_sel.currentIndexChanged.connect(self._on_document_bg)
+        self.content_layout.addWidget(self.doc_bg_sel)
 
         self.content_layout.addWidget(self._label("ACCENT COLOR"))
         self.content_layout.addLayout(self._accent_row())
@@ -129,9 +148,13 @@ class SettingsDialog(FrostedDialog):
 
     @staticmethod
     def _swatch_qss(hex_: str, selected: bool) -> str:
-        border = "2px solid #ffffff" if selected else "2px solid transparent"
+        ring = "#ffffff" if selected else "transparent"
+        # NOTE: the border MUST carry its `border:` property — a bare
+        # "2px solid …" is an invalid declaration that makes Qt discard the whole
+        # rule (background included → empty black swatches).
         return (
-            f"QPushButton{{background:{hex_};border-radius:14px;{border};}}"
+            f"QPushButton{{background:{hex_};border-radius:14px;"
+            f"border:2px solid {ring};}}"
             f"QPushButton:hover{{border:2px solid rgba(255,255,255,0.6);}}"
         )
 
@@ -179,3 +202,9 @@ class SettingsDialog(FrostedDialog):
         set_square_corners(bool(on))
         self._apply_live()
         self._restart_note.setText("Square corners fully applies after a restart.")
+
+    def _on_document_bg(self, _idx: int) -> None:
+        self.s.document_bg = self.doc_bg_sel.currentData()
+        # theme_changed re-applies the viewer's page paper (PdfViewer reads the
+        # setting + theme live in _apply_document_display) — no restart.
+        AppBus.get().theme_changed.emit()

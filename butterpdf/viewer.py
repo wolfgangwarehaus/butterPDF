@@ -10,10 +10,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QMargins, QPointF, Qt, Signal
-from PySide6.QtGui import QColor, QPalette
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QColor
 from PySide6.QtPdf import QPdfDocument
-from PySide6.QtPdfWidgets import QPdfView
 from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
@@ -25,13 +24,42 @@ from PySide6.QtWidgets import (
 )
 
 from butterpdf import ui_helpers
+from butterpdf.bus import AppBus
 from butterpdf.design_tokens import TYPE_BODY, TYPE_DISPLAY, type_qss
+from butterpdf.page_view import RenderedPdfView
 from butterpdf.settings import get_settings
 from butterpdf.top_bar import CenteredBar
 
 _ZOOM_STEP = 1.25
-_ZOOM_MIN = 0.1
-_ZOOM_MAX = 8.0
+
+# Document-background modes → (paper, recolor). paper is the fill behind the page
+# (None = frosted see-through); recolor is (invert, floor, ceil) for
+# page_view.recolor, or None for a straight render. The dark modes invert +
+# re-level the grayscale content (text/paper) while leaving colour images natural.
+_DOC_BG = {
+    "white": (QColor(255, 255, 255), None),
+    "light_grey": (QColor(202, 202, 202), (False, 0, 202)),
+    "dark_grey": (QColor(32, 32, 32), (True, 32, 220)),
+    "oled": (QColor(0, 0, 0), (True, 0, 255)),
+    "transparent": (None, None),
+}
+# The selector's user-facing options, in order (value, label).
+DOC_BG_OPTIONS = [
+    ("auto", "Auto (match theme)"),
+    ("white", "White"),
+    ("light_grey", "Light grey"),
+    ("dark_grey", "Dark grey"),
+    ("oled", "OLED black"),
+    ("transparent", "Transparent"),
+]
+
+
+def _resolve_doc_bg(mode: str, dark: bool) -> tuple:
+    """(paper, recolor) for a mode. 'auto' follows the app theme: a light theme →
+    white, a dark theme → dark grey."""
+    if mode == "auto":
+        mode = "dark_grey" if dark else "white"
+    return _DOC_BG.get(mode, _DOC_BG["white"])
 
 
 class PdfViewer(QWidget):
@@ -44,34 +72,17 @@ class PdfViewer(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setAcceptDrops(True)
-        self._fit = True  # track ZoomMode ourselves (QPdfView has no public getter)
         self._path: str | None = None
 
+        # butterPDF renders pages itself (page_view.RenderedPdfView) rather than
+        # using QPdfView — the fill + sign layers need exact page geometry to anchor
+        # overlay widgets, which QPdfView doesn't expose. The frost, even 8px
+        # gutters, and 10px page spacing live in RenderedPdfView.
         self._doc = QPdfDocument(self)
-        self._view = QPdfView(self)
-        self._view.setDocument(self._doc)
-        self._view.setPageMode(QPdfView.PageMode.MultiPage)
-        self._view.setZoomMode(QPdfView.ZoomMode.FitToWidth)
-        self._nav = self._view.pageNavigator()
-        self._frost_view()
-        # EVEN bezels the width of the scrollbar pill. The vertical scrollbar reserves
-        # its 8px lane on the right only, which QtPdf would otherwise add to the right
-        # gutter alone (right looked bigger). Mirror it with an 8px viewport margin on
-        # the LEFT, and let the page fill the rest (doc margins 0) — both sides then read
-        # as a matching 8px frosted strip, with the accent pill centered in the right.
-        self._view.setViewportMargins(8, 0, 0, 0)
-        # No top/bottom bezel: the page meets the top bar + footer flush. QtPdf adds a
-        # trailing pageSpacing gap BELOW the last page (no API to drop just it), so a
-        # matching NEGATIVE bottom margin cancels it. Inter-page gaps stay; side gutters
-        # are the 8px viewport margin (left) + the scrollbar lane (right).
-        self._view.setPageSpacing(10)
-        self._view.setDocumentMargins(QMargins(0, 0, 0, -10))
+        self._view = RenderedPdfView(self)
+        self._view.set_document(self._doc)
         if get_settings().auto_hide_scrollbars:
             ui_helpers.install_autofade_scrollbars(self._view)
-        # Fit-width never needs horizontal scroll — hide the horizontal bar so it can't
-        # reserve its 8px lane at the very bottom (a frosted strip below the last page
-        # that made the footer chrome read thicker). _zoom_by flips it back to AsNeeded.
-        self._view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         self._empty = self._make_empty_state()
         self._stack = QStackedWidget(self)
@@ -84,7 +95,11 @@ class PdfViewer(QWidget):
 
         self._footer = self._make_footer()
         self._doc.statusChanged.connect(self._on_status_changed)
-        self._nav.currentPageChanged.connect(lambda _p: self._update_page_label())
+        self._view.current_page_changed.connect(lambda _p: self._update_page_label())
+        # The page paper follows the app theme (+ the frosted-document setting), and
+        # re-applies live when either changes — theme_changed carries both.
+        AppBus.get().theme_changed.connect(self._apply_document_display)
+        self._apply_document_display()
         self._refresh()
 
     # ── public ───────────────────────────────────────────────────────────────
@@ -94,6 +109,11 @@ class PdfViewer(QWidget):
 
     def open_path(self, path: str | Path) -> None:
         self._path = str(path)
+        # Image placements (for dark-mode image protection) come from the file
+        # itself via pypdf; lazy + best-effort, independent of the QtPdf render.
+        from butterpdf.pdf_images import ImageBoxes
+
+        self._images = ImageBoxes(self._path)
         self._doc.load(self._path)
 
     def open_dialog(self) -> None:
@@ -101,25 +121,13 @@ class PdfViewer(QWidget):
         if path:
             self.open_path(path)
 
-    def _frost_view(self) -> None:
-        """Let the window's frost show through the page gutters + margins instead of
-        QtPdf's default opaque grey — uniform frosted glass is a dough hallmark."""
-        view = self._view
-        view.setStyleSheet("QPdfView { background: transparent; border: none; }")
-        viewport = view.viewport()
-        viewport.setAutoFillBackground(False)
-        clear = QColor(0, 0, 0, 0)
-        pal = view.palette()
-        for role in (
-            QPalette.ColorRole.Base,
-            QPalette.ColorRole.Dark,
-            QPalette.ColorRole.Mid,
-            QPalette.ColorRole.Window,
-            QPalette.ColorRole.Button,
-        ):
-            pal.setColor(role, clear)
-        view.setPalette(pal)
-        viewport.setPalette(pal)
+    def _apply_document_display(self) -> None:
+        """Resolve the page paper + recolor from the 'Document background' setting
+        (which may follow the app theme) and push it to the view."""
+        from butterpdf.theme import get_active_theme
+
+        paper, recolor = _resolve_doc_bg(get_settings().document_bg, get_active_theme().dark)
+        self._view.set_display(paper, recolor)
 
     # ── drag & drop ──────────────────────────────────────────────────────────
     def _dropped_pdf(self, event) -> str | None:
@@ -143,30 +151,25 @@ class PdfViewer(QWidget):
 
     # ── view actions ─────────────────────────────────────────────────────────
     def _zoom_by(self, factor: float) -> None:
-        self._fit = False
-        self._view.setZoomMode(QPdfView.ZoomMode.Custom)
-        # Zoomed in the page can exceed the width — allow horizontal scroll again.
-        self._view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        target = max(_ZOOM_MIN, min(_ZOOM_MAX, self._view.zoomFactor() * factor))
-        self._view.setZoomFactor(target)
+        self._view.zoom_by(factor)
         self._update_zoom_label()
 
     def _fit_width(self) -> None:
-        self._fit = True
-        self._view.setZoomMode(QPdfView.ZoomMode.FitToWidth)
-        self._view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._view.set_fit_width()
         self._update_zoom_label()
 
     def _go(self, delta: int) -> None:
-        count = self._doc.pageCount()
-        if count <= 0:
+        if self._doc.pageCount() <= 0:
             return
-        page = max(0, min(count - 1, self._nav.currentPage() + delta))
-        self._nav.jump(page, QPointF(0, 0), 0)
+        self._view.jump_to_page(self._view.current_page() + delta)
 
     # ── state ────────────────────────────────────────────────────────────────
     def _on_status_changed(self, status) -> None:
         if status == QPdfDocument.Status.Ready:
+            self._view.rebuild()  # build page widgets now the doc has pages
+            images = getattr(self, "_images", None)
+            if images is not None:
+                self._view.set_image_boxes(images.boxes_pt)
             self._stack.setCurrentWidget(self._view)
             self.document_changed.emit(Path(self._path).name if self._path else "")
         elif status == QPdfDocument.Status.Error:
@@ -187,13 +190,15 @@ class PdfViewer(QWidget):
 
     def _update_page_label(self) -> None:
         count = self._doc.pageCount()
-        self._page_label.setText(f"{self._nav.currentPage() + 1} / {count}" if count > 0 else "—")
+        current = self._view.current_page()
+        self._page_label.setText(f"{current + 1} / {count}" if count > 0 else "—")
         footer = getattr(self, "_footer", None)
         if isinstance(footer, CenteredBar):
             footer.recenter()  # the page label changed width
 
     def _update_zoom_label(self) -> None:
-        self._fit_btn.setText("Fit" if self._fit else f"{round(self._view.zoomFactor() * 100)}%")
+        fit = self._view.is_fit()
+        self._fit_btn.setText("Fit" if fit else f"{round(self._view.zoom_factor() * 100)}%")
 
     # ── widgets ──────────────────────────────────────────────────────────────
     def _make_empty_state(self) -> QWidget:

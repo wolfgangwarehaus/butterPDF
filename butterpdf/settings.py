@@ -74,6 +74,18 @@ class Settings:
     def font_family(self, v: str) -> None:
         self._set("ui/font_family", v)
 
+    # ── Document ──────────────────────────────────────────────────────
+    @property
+    def document_bg(self) -> str:
+        # The PDF page background mode: auto (match app theme) | white | light_grey
+        # | dark_grey | oled | transparent (frosted see-through). The dark modes
+        # invert + re-level the page's grayscale content while keeping images natural.
+        return self._s.value("doc/background", "auto", type=str)
+
+    @document_bg.setter
+    def document_bg(self, v: str) -> None:
+        self._set("doc/background", str(v))
+
     # ── Window chrome ─────────────────────────────────────────────────
     @property
     def native_window_border(self) -> bool:
