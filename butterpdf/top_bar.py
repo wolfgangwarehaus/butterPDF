@@ -61,13 +61,13 @@ class TopBar(CenteredBar):
         lay.setContentsMargins(8, 4, 8, 4)
         lay.setSpacing(4)
 
-        # ── left: settings gear + the document menu (Open / Edit / Sign) ───
-        self.settings_btn = self._chrome_button("settings", "Settings")
-        self.settings_btn.clicked.connect(lambda: AppBus.get().show_settings.emit())
-        lay.addWidget(self.settings_btn)
+        # ── left: the document menu (Open / Sign / Save) + settings gear ───
         self.menu_btn = self._chrome_button("menu", "Menu")
         self.menu_btn.clicked.connect(self._show_menu)
         lay.addWidget(self.menu_btn)
+        self.settings_btn = self._chrome_button("settings", "Settings")
+        self.settings_btn.clicked.connect(lambda: AppBus.get().show_settings.emit())
+        lay.addWidget(self.settings_btn)
         lay.addStretch(1)
 
         # ── right: window controls ─────────────────────────────────────────
