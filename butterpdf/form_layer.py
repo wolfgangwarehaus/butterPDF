@@ -17,9 +17,10 @@ from butterpdf import ui_helpers
 
 
 class CheckField(QPushButton):
-    """A checkable box that stamps a mark when checked — a ✓ or ✕ per the
-    ``checkbox_mark`` setting (how people fill a paper checkbox), not a plain
-    fill. Call :meth:`refresh_mark` to re-read the setting live."""
+    """A checkable box that stamps an ✕ when checked (how a paper checkbox is
+    filled), not a plain fill."""
+
+    MARK = "✕"
 
     def __init__(self, field) -> None:
         super().__init__()
@@ -28,14 +29,11 @@ class CheckField(QPushButton):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setChecked(bool(field.on_value) and field.value == field.on_value)
         self.setStyleSheet(_check_qss())
-        self.toggled.connect(lambda _on: self.refresh_mark())
-        self.refresh_mark()
+        self.toggled.connect(self._update_mark)
+        self._update_mark()
 
-    def refresh_mark(self) -> None:
-        from butterpdf.settings import get_settings
-
-        mark = "✕" if get_settings().checkbox_mark == "cross" else "✓"  # ✕ / ✓
-        self.setText(mark if self.isChecked() else "")
+    def _update_mark(self, *_) -> None:
+        self.setText(self.MARK if self.isChecked() else "")
 
     def resizeEvent(self, e) -> None:  # noqa: N802 (Qt override)
         super().resizeEvent(e)

@@ -86,15 +86,6 @@ class Settings:
     def document_bg(self, v: str) -> None:
         self._set("doc/background", str(v))
 
-    @property
-    def checkbox_mark(self) -> str:
-        # How a ticked form checkbox is stamped: "check" (✓) or "cross" (✕).
-        return self._s.value("doc/checkbox_mark", "check", type=str)
-
-    @checkbox_mark.setter
-    def checkbox_mark(self, v: str) -> None:
-        self._set("doc/checkbox_mark", str(v))
-
     # ── Window chrome ─────────────────────────────────────────────────
     @property
     def native_window_border(self) -> bool:

@@ -97,7 +97,6 @@ class PdfViewer(QWidget):
         # The page paper follows the app theme (+ the frosted-document setting), and
         # re-applies live when either changes — theme_changed carries both.
         AppBus.get().theme_changed.connect(self._apply_document_display)
-        AppBus.get().theme_changed.connect(self._refresh_field_marks)
         self._apply_document_display()
         self._refresh()
 
@@ -207,12 +206,6 @@ class PdfViewer(QWidget):
             self.save_document(path, flatten=flatten)
         except Exception as exc:  # surface, never crash
             frosted_warning(self, "Couldn't save", f"Saving the PDF failed:\n{exc}")
-
-    def _refresh_field_marks(self) -> None:
-        """Re-read the checkbox-mark setting on the form's checkboxes (live)."""
-        for widget in getattr(self, "_field_widgets", ()):
-            if hasattr(widget, "refresh_mark"):
-                widget.refresh_mark()
 
     def _apply_document_display(self) -> None:
         """Resolve the page paper + recolor from the 'Document background' setting
