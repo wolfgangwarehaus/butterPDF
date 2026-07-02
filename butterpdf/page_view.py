@@ -120,6 +120,7 @@ class PageWidget(QWidget):
         self._recolor: tuple[bool, int, int] | None = None  # (invert, floor, ceil)
         self._boxes_provider = None  # callable(index) -> [image boxes in points]
         self._fields: list[tuple] = []  # (widget, rect_pt) overlays anchored to the page
+        self._overlays: list = []  # self-positioning movable overlays (signatures)
         # Opaque only when the paper fully covers the widget (an opaque fill) — a
         # translucent/None paper must let the frost show through.
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
@@ -174,11 +175,33 @@ class PageWidget(QWidget):
         self.setFixedSize(w, h)
         for widget, rect_pt in getattr(self, "_fields", ()):  # re-place on zoom
             self._place_field(widget, rect_pt)
+        for ov in getattr(self, "_overlays", ()):  # movable overlays re-read the scale
+            ov.reposition()
 
     def pt_to_px(self, x_pt: float, y_pt: float) -> tuple[float, float]:
         """Map a PDF point (origin bottom-left) to a page pixel (origin top-left)
         at the current scale — for positioning overlay widgets."""
         return x_pt * self._scale, (self._pt_size.height() - y_pt) * self._scale
+
+    def px_to_pt(self, x_px: float, y_px: float) -> tuple[float, float]:
+        """Inverse of :meth:`pt_to_px` — a page pixel back to a PDF point (used
+        when a movable overlay is dragged, to keep its point-rect in sync)."""
+        return x_px / self._scale, self._pt_size.height() - y_px / self._scale
+
+    def page_size_pt(self) -> tuple[float, float]:
+        return self._pt_size.width(), self._pt_size.height()
+
+    def add_overlay(self, widget: QWidget) -> None:
+        """Host a self-positioning movable overlay (a placed signature). It re-reads
+        its own geometry from the page scale via ``reposition()`` on zoom."""
+        widget.setParent(self)
+        self._overlays.append(widget)
+        widget.reposition()
+        widget.show()
+
+    def remove_overlay(self, widget: QWidget) -> None:
+        if widget in self._overlays:
+            self._overlays.remove(widget)
 
     # ── render ────────────────────────────────────────────────────────────
     def _render(self) -> None:

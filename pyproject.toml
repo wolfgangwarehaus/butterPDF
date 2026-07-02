@@ -49,9 +49,11 @@ dependencies = [
     # NumPy powers the document-background recolor (smart invert / dark modes) —
     # fast, vectorised per-pixel work over a rendered page.
     "numpy>=1.24",
-    # pypdf reads image placements (dark mode leaves photos natural) and — the
-    # coming fill/save work — AcroForm fields. BSD-3, pure-Python.
+    # pypdf reads image placements (dark mode leaves photos natural) + AcroForm
+    # fields, and fills them with regenerated appearances. BSD-3, pure-Python.
     "pypdf>=4.0",
+    # pikepdf (QPDF) composites signatures into the page as image XObjects on save.
+    "pikepdf>=8",
 ]
 
 [project.optional-dependencies]

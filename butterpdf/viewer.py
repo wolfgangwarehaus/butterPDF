@@ -148,6 +148,55 @@ class PdfViewer(QWidget):
             page.add_field(widget, fld.rect)
             self._field_widgets.append(widget)
 
+    # ── signatures ───────────────────────────────────────────────────────────
+    def can_edit(self) -> bool:
+        return self._doc.status() == QPdfDocument.Status.Ready and self._doc.pageCount() > 0
+
+    def begin_sign(self) -> None:
+        """Create a signature (dialog) and drop it on the current page to place."""
+        if not self.can_edit():
+            return
+        from PySide6.QtWidgets import QDialog
+
+        from butterpdf.sign_dialog import SignatureDialog
+
+        dlg = SignatureDialog(self.window())
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            img = dlg.signature_image()
+            if img is not None and not img.isNull():
+                self.place_signature(img)
+
+    def place_signature(self, image) -> None:
+        """Drop ``image`` onto the current page at a comfortable default size, ready
+        to drag/resize. Tracked for compositing on save."""
+        from butterpdf.sign_overlay import SignatureOverlay
+
+        idx = self._view.current_page()
+        page = self._view.page_widget(idx)
+        if page is None:
+            return
+        pw, ph = page.page_size_pt()
+        width_pt = min(220.0, pw * 0.42)
+        aspect = image.height() / image.width() if image.width() else 0.4
+        height_pt = width_pt * aspect
+        x0, y0 = pw * 0.10, ph * 0.12  # lower-left-ish, a natural sign spot
+        rect_pt = (x0, y0, x0 + width_pt, y0 + height_pt)
+        overlay = SignatureOverlay(page, image, rect_pt)
+        page.add_overlay(overlay)
+        self._signatures = getattr(self, "_signatures", [])
+        self._signatures.append((idx, overlay))
+
+    def _collect_signatures(self) -> list:
+        """(page_index, rect_pt points, QImage) for each placed signature still
+        alive — for compositing into the saved PDF."""
+        out = []
+        for idx, ov in getattr(self, "_signatures", []):
+            try:
+                out.append((idx, ov.rect_pt, ov.image))
+            except RuntimeError:
+                continue  # deleted overlay
+        return out
+
     # ── form save ──────────────────────────────────────────────────────────
     def has_form(self) -> bool:
         return bool(getattr(self, "_field_widgets", None))
@@ -174,7 +223,10 @@ class PdfViewer(QWidget):
         Raises on failure — the caller surfaces it."""
         from butterpdf.pdf_save import save_filled
 
-        save_filled(self._path or "", dest_path, self._collect_values(), flatten=flatten)
+        save_filled(
+            self._path or "", dest_path, self._collect_values(),
+            signatures=self._collect_signatures(), flatten=flatten,
+        )
 
     def save(self) -> None:
         """Save over the currently-open file (atomic). No-op without a document."""

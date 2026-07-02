@@ -19,27 +19,37 @@ def save_filled(
     dest_path: str,
     values: dict[str, str],
     *,
+    signatures: list | None = None,
     flatten: bool = False,
 ) -> None:
-    """Fill ``src_path``'s fields with ``values`` and write to ``dest_path`` with
-    regenerated appearance streams. Raises on failure (caller shows a toast)."""
+    """Fill ``src_path``'s fields with ``values``, composite any ``signatures``
+    ((page_index, rect_pt, QImage) with rect in points, bottom-left origin), and
+    write to ``dest_path``. Appearance streams are regenerated so fields show in
+    Adobe/print; signatures are baked as image XObjects. Raises on failure."""
+    import io
     import os
 
     from pypdf import PdfWriter
 
+    # 1. Fill the form (pypdf) into a memory buffer.
     writer = PdfWriter(clone_from=src_path)
     if values:
-        # A list of all pages so fields are matched wherever they live. Appearance
-        # streams are regenerated (auto_regenerate=False) → correct in Adobe/print.
         writer.update_page_form_field_values(
             list(writer.pages), values, auto_regenerate=False, flatten=flatten,
         )
-    # Write to a sibling temp then atomically replace, so an overwrite-in-place
-    # (Save over the currently-open file) can't truncate/corrupt it on a failure.
+    buf = io.BytesIO()
+    writer.write(buf)
+    data = buf.getvalue()
+
+    # 2. Stamp signatures (pikepdf) if any, then atomically replace the target — so
+    # an overwrite-in-place can't corrupt the open file on a failure.
     tmp = f"{dest_path}.butterpdf.tmp"
     try:
-        with open(tmp, "wb") as f:
-            writer.write(f)
+        if signatures:
+            _stamp_signatures(data, signatures, tmp)
+        else:
+            with open(tmp, "wb") as f:
+                f.write(data)
         os.replace(tmp, dest_path)
     except Exception:
         try:
@@ -47,3 +57,42 @@ def save_filled(
         except OSError:
             pass
         raise
+
+
+def _stamp_signatures(pdf_bytes: bytes, signatures: list, dest_path: str) -> None:
+    """Bake each signature image into the page content as an image XObject (with a
+    soft-mask for its transparency), positioned by its point-rect."""
+    import io
+
+    import pikepdf
+    from pikepdf import Name, Stream
+
+    from butterpdf import signature as sig
+
+    pdf = pikepdf.open(io.BytesIO(pdf_bytes))
+    try:
+        for page_index, rect_pt, image in signatures:
+            if page_index < 0 or page_index >= len(pdf.pages):
+                continue
+            page = pdf.pages[page_index]
+            rgb, alpha, w, h = sig.to_rgb_alpha(image)
+
+            smask = Stream(pdf, alpha)
+            smask.Type, smask.Subtype = Name.XObject, Name.Image
+            smask.Width, smask.Height = w, h
+            smask.ColorSpace, smask.BitsPerComponent = Name.DeviceGray, 8
+
+            xobj = Stream(pdf, rgb)
+            xobj.Type, xobj.Subtype = Name.XObject, Name.Image
+            xobj.Width, xobj.Height = w, h
+            xobj.ColorSpace, xobj.BitsPerComponent = Name.DeviceRGB, 8
+            xobj.SMask = smask
+
+            name = page.add_resource(xobj, Name.XObject)
+            x0, y0, x1, y1 = rect_pt
+            # image space is a unit square; this cm maps it to the target rect (pts)
+            cs = f"q {x1 - x0:.3f} 0 0 {y1 - y0:.3f} {x0:.3f} {y0:.3f} cm {name} Do Q"
+            page.contents_add(Stream(pdf, cs.encode("ascii")), prepend=False)
+        pdf.save(dest_path)
+    finally:
+        pdf.close()

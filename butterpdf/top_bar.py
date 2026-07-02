@@ -115,6 +115,11 @@ class TopBar(CenteredBar):
         menu = ui_helpers.opaque_menu(self, blur_corner_radius=8)  # frosted, readable
         menu.addAction("Open…").triggered.connect(self._open)
 
+        can_edit = self._viewer is not None and self._viewer.can_edit()
+        sign = menu.addAction("Sign…")
+        sign.setEnabled(can_edit)
+        sign.triggered.connect(lambda: self._viewer.begin_sign())
+
         has_form = self._viewer is not None and self._viewer.has_form()
         menu.addSeparator()
         save = menu.addAction("Save")
@@ -128,9 +133,8 @@ class TopBar(CenteredBar):
         flatten.triggered.connect(lambda: self._viewer.save_as(flatten=True))
 
         menu.addSeparator()
-        for label in ("Edit", "Sign"):
-            soon = menu.addAction(f"{label}  (soon)")
-            soon.setEnabled(False)  # MVP fast-follow features
+        soon = menu.addAction("Edit  (soon)")
+        soon.setEnabled(False)  # MVP fast-follow
         menu.exec(self.menu_btn.mapToGlobal(self.menu_btn.rect().bottomLeft()))
 
     def _open(self) -> None:

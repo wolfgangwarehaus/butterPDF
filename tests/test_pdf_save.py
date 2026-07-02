@@ -86,3 +86,26 @@ def test_flatten_writes_a_file(tmp_path):
     out = tmp_path / "flat.pdf"
     save_filled(src, str(out), {"fullname": "Ada"}, flatten=True)
     assert out.is_file() and out.stat().st_size > 0
+
+
+def test_signature_is_baked_as_image_xobject(tmp_path):
+    pytest.importorskip("pikepdf")
+    from PySide6.QtGui import QColor, QImage
+
+    sig = QImage(60, 30, QImage.Format.Format_RGBA8888)
+    sig.fill(QColor(0, 0, 0, 0))
+    for x in range(10, 50):
+        for y in range(10, 20):
+            sig.setPixelColor(x, y, QColor(10, 20, 40, 255))  # some opaque "ink"
+
+    src = _form_pdf(tmp_path)
+    out = tmp_path / "signed.pdf"
+    save_filled(src, str(out), {}, signatures=[(0, (50.0, 50.0, 150.0, 90.0), sig)])
+
+    import pikepdf
+
+    pdf = pikepdf.open(str(out))
+    xobjs = pdf.pages[0].get("/Resources", {}).get("/XObject", {})
+    images = [v for v in xobjs.values() if str(v.get("/Subtype")) == "/Image"]
+    assert images, "no image XObject stamped"
+    assert any("/SMask" in v for v in images), "signature lost its transparency mask"
