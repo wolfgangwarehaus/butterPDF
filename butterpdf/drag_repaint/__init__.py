@@ -4,26 +4,27 @@ leaves behind a translucent window dragged on the NVIDIA EGL path.
 The artifact (KWin bug 455526 / 457727) lives in KWin's optimized
 `paintSimpleScreen` partial-damage render path. A *transformed* window
 is instead rendered through `paintGenericScreen` — a full-frame repaint
-— which never exercises the buggy path. butterpdf ships a tiny KWin
-scripted effect that, while one of its own windows is being dragged,
-holds it under an imperceptible in-progress transform (and force-blurs
-it so the blur survives the transform). Visually inert; it only flips
-KWin onto the clean render path for the duration of the drag.
+— which never exercises the buggy path. butterpdf ships a tiny KWin scripted
+effect that, while one of its own windows is being dragged, holds it
+under an imperceptible in-progress transform (and force-blurs it so the
+blur survives the transform). Visually inert; it only flips KWin onto
+the clean render path for the duration of the drag.
 
 Public API:
     is_supported() -> bool   # backend can install the effect
     install() -> bool        # idempotent install + enable + load
     uninstall() -> bool      # idempotent unload + disable + remove
-    sync() -> bool           # install (or, under BUTTERPDF_NO_DRAG_REPAINT,
+    sync() -> bool           # install (or, under DOUGH_NO_DRAG_REPAINT,
                              #   uninstall) — the one call boot makes
     diagnose() -> dict       # backend-specific debug snapshot
 
-KDE Wayland: the `_kwin` backend copies the bundled effect into the
-user's KWin effects directory and asks KWin to load it. Anywhere else
-(X11, Windows, macOS, non-KDE Wayland): the unsupported backend no-ops
-— the artifact is a KWin/NVIDIA-specific bug and the fix is too.
+KDE Wayland: the `_kwin` backend renders the bundled effect (scoped to the
+running app's identity — see `_kwin`) into the user's KWin effects directory
+and asks KWin to load it. Anywhere else (X11, Windows, macOS, non-KDE
+Wayland): the unsupported backend no-ops — the artifact is a KWin/NVIDIA-
+specific bug and the fix is too.
 
-`BUTTERPDF_NO_DRAG_REPAINT=1` forces `sync()` to remove the effect instead of
+`DOUGH_NO_DRAG_REPAINT=1` forces `sync()` to remove the effect instead of
 installing it — a support escape hatch, not a user-facing setting.
 """
 
@@ -56,9 +57,9 @@ def uninstall() -> bool:
 
 def sync() -> bool:
     """Reconcile the effect with what's wanted: install it, unless
-    ``BUTTERPDF_NO_DRAG_REPAINT=1`` is set, in which case remove it. Call once
+    ``DOUGH_NO_DRAG_REPAINT=1`` is set, in which case remove it. Call once
     at startup. A no-op off KDE Wayland."""
-    if os.environ.get("BUTTERPDF_NO_DRAG_REPAINT") == "1":
+    if os.environ.get("DOUGH_NO_DRAG_REPAINT") == "1":
         return uninstall()
     return install()
 

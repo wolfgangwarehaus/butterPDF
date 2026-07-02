@@ -1,8 +1,8 @@
 /*
     butterpdf — full-repaint-on-drag KWin scripted effect.
 
-    While a butterpdf window is being interactively moved, hold it under an
-    in-progress transform. KWin renders any *transformed* window through
+    While one of this app's windows is being interactively moved, hold it under
+    an in-progress transform. KWin renders any *transformed* window through
     paintGenericScreen() — a full-frame repaint — instead of the optimized
     paintSimpleScreen() partial-damage path. That partial-damage path is where
     the NVIDIA blur "stale rectangle" artifact lives (KWin bug 455526 / 457727),
@@ -22,6 +22,10 @@
     Effect.WindowForceBlurRole while the transform is held — the same trick
     the built-in `maximize` effect uses — and clear it when the drag ends.
 
+    {{app_id}} is substituted from the running app's identity when the effect is
+    installed (butterpdf/drag_repaint/_kwin.py), so a fork matches its own windows
+    with no source edit — see the module docstring.
+
     SPDX-License-Identifier: MIT
 */
 
@@ -29,18 +33,18 @@
 
 "use strict";
 
-function isbutterPDF(window) {
+function isOurs(window) {
     var cls = (window.windowClass || "").toLowerCase();
     var cap = (window.caption || "").toLowerCase();
-    return cls.indexOf("butterpdf") !== -1 || cap.indexOf("butterpdf") !== -1;
+    return cls.indexOf("{{app_id}}") !== -1 || cap.indexOf("{{app_id}}") !== -1;
 }
 
 function onMoveStart(window) {
-    if (!isbutterPDF(window)) {
+    if (!isOurs(window)) {
         return;
     }
-    if (window.butterpdfDragAnim !== undefined) {
-        cancel(window.butterpdfDragAnim);
+    if (window.{{app_id}}DragAnim !== undefined) {
+        cancel(window.{{app_id}}DragAnim);
     }
     // Force blur ON before the transform lands — KWin's blur effect skips
     // transformed windows unless WindowForceBlurRole is set.
@@ -48,7 +52,7 @@ function onMoveStart(window) {
     // An in-progress animate() — KWin repaints an actively-animating window
     // every frame, forcing the full-repaint path for the whole drag.
     // Cancelled on move-finish, well before the hour elapses.
-    window.butterpdfDragAnim = animate({
+    window.{{app_id}}DragAnim = animate({
         window: window,
         duration: 3600000,
         curve: QEasingCurve.Linear,
@@ -61,9 +65,9 @@ function onMoveStart(window) {
 }
 
 function onMoveFinish(window) {
-    if (window.butterpdfDragAnim !== undefined) {
-        cancel(window.butterpdfDragAnim);
-        window.butterpdfDragAnim = undefined;
+    if (window.{{app_id}}DragAnim !== undefined) {
+        cancel(window.{{app_id}}DragAnim);
+        window.{{app_id}}DragAnim = undefined;
         // Transform is gone — drop the force-blur override too.
         window.setData(Effect.WindowForceBlurRole, null);
     }
@@ -79,4 +83,4 @@ for (const window of effects.stackingOrder) {
     manage(window);
 }
 
-print("[butterpdf-dragrepaint] effect loaded");
+print("[{{app_id}}-dragrepaint] effect loaded");

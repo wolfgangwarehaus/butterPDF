@@ -11,11 +11,10 @@ message-box subclass (see :func:`frosted_warning` / :func:`frosted_info`).
 Frameless on every platform unless the user opts into native chrome
 (``settings.native_window_border``); the custom titlebar IS the chrome, and the
 dialog is fixed-size (non-resizable) by default — pass ``resizable=True`` to opt in.
-Frost survives frameless because compositor blur is requested via
-``enableBlurBehind`` (decoration-independent). Body colour is
-status-aware (``body_color_tuple`` — glass when blur is verified, near-opaque
-otherwise) so it is never see-through; compositor blur is applied once the
-surface is mapped, matching the other frosted surfaces.
+Frost survives frameless because compositor blur is requested via ``enableBlurBehind``
+(decoration-independent). Body colour is status-aware (``body_color_tuple`` — glass
+when blur is verified, near-opaque otherwise) so it is never see-through; blur is
+applied once the surface is mapped, matching the other frosted surfaces.
 """
 
 from __future__ import annotations
@@ -34,7 +33,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from butterpdf.design_tokens import RADIUS_WINDOW
+from butterpdf.design_tokens import RADIUS_WINDOW, rad
 
 
 class FrostedDialog(QDialog):
@@ -61,11 +60,12 @@ class FrostedDialog(QDialog):
         from butterpdf.settings import get_settings
         from butterpdf.ui_helpers import GLOBAL_STYLE, body_color_tuple
 
-        # Frameless on EVERY platform unless the user opts into native chrome — the
-        # custom titlebar IS the chrome. (Previously decorated on KDE Wayland, relying
-        # on an app-wide KWin `noborder` rule that's absent on a fresh launch, so the
-        # native decoration doubled up over the frosted header. Frost survives
-        # frameless: blur is via enableBlurBehind, which is decoration-independent.)
+        # Frameless on every platform unless the user opts into native chrome — the
+        # custom titlebar IS the chrome. (Was gated on is_kde_wayland() alone, which
+        # disagreed with the main window's `is_kde_wayland() and not native_window_border`;
+        # this aligns them. Dialogs are transient/modal, so frameless is fine here — no
+        # sustained-drag blur concern. Frost survives frameless: blur is via
+        # enableBlurBehind, which is decoration-independent.)
         flags = Qt.WindowType.Window
         if not get_settings().native_window_border:
             flags |= Qt.WindowType.FramelessWindowHint
@@ -84,8 +84,9 @@ class FrostedDialog(QDialog):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
         if not resizable:
-            # Fit content + stay non-resizable — a settings/message dialog has no
-            # reason to be dragged larger (opt in with resizable=True).
+            # Fit content + stay non-resizable — a settings/message dialog has no reason
+            # to be dragged larger (opt in with resizable=True). Centering reads correctly
+            # only inside a snug, fixed-size box.
             outer.setSizeConstraint(QLayout.SizeConstraint.SetFixedSize)
         outer.addWidget(self._build_titlebar(title, icon_name))
 
@@ -130,7 +131,7 @@ class FrostedDialog(QDialog):
         close_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         close_btn.setStyleSheet(
             f"QPushButton {{ background: transparent; color: {TEXT_DIM}; "
-            f"border: none; border-radius: 6px; {type_qss(TYPE_CAPTION)} }}"
+            f"border: none; border-radius: {rad(6)}px; {type_qss(TYPE_CAPTION)} }}"
             f"QPushButton:hover {{ background: {WASH_HOVER}; color: {TEXT}; }}"
         )
         close_btn.clicked.connect(self.reject)

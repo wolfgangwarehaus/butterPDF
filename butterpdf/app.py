@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 
 from butterpdf import __version__, ui_helpers
 from butterpdf.bus import AppBus
+from butterpdf.platform_compat import IS_MACOS
 
 
 def _setup_hidpi() -> None:
@@ -72,6 +73,85 @@ def _placeholder() -> QWidget:
     return w
 
 
+# Held for the process lifetime so faulthandler's file sink isn't garbage-
+# collected / closed out from under it on GUI-subsystem builds.
+_CRASH_LOG_FH = None
+
+
+def _diag_log_dir():
+    """Best-effort writable dir for crash / diagnostic logs, resolved WITHOUT a
+    QApplication (this runs before one exists). Windows → ``%LOCALAPPDATA%\\
+    {app}``; otherwise ``$XDG_CACHE_HOME`` (or ``~/.cache``) ``/{app}`` — where
+    ``{app}`` is the configured identity slug. Returns None if nothing writable."""
+    import os as _os
+
+    from butterpdf import identity as _ident
+
+    try:
+        if _os.name == "nt":
+            base = _os.environ.get("LOCALAPPDATA") or _os.path.expanduser("~")
+        else:
+            base = _os.environ.get("XDG_CACHE_HOME") or _os.path.join(
+                _os.path.expanduser("~"), ".cache"
+            )
+        d = _os.path.join(base, _ident.app())
+        _os.makedirs(d, exist_ok=True)
+        return d
+    except Exception:
+        return None
+
+
+def _enable_faulthandler() -> None:
+    """Convert a hard native crash (e.g. a cross-thread ``~QObject``) into an
+    attributable Python + C stack instead of silent process death.
+
+    On a normal interpreter this writes to stderr. Under a GUI-subsystem
+    interpreter (a pipx ``.exe`` gui-script on Windows / ``pythonw``)
+    ``sys.stderr`` is ``None`` and a bare ``enable()`` raises ``RuntimeError`` —
+    which would both kill the app before ``app.exec()`` AND leave a windowed
+    build's crash with zero trace. So there we instead point faulthandler at a
+    ``crash.log`` file and attach a file log (``{app}.log``, level from
+    ``DOUGH_LOG_LEVEL``, default INFO) the user can hand back."""
+    import faulthandler
+
+    if sys.stderr is not None:
+        try:
+            faulthandler.enable()
+        except Exception:
+            # e.g. a stderr replaced by a fileno-less stream (test capture,
+            # embedded hosts) — losing the crash hook must never be fatal.
+            pass
+        return
+
+    # stderr is None (GUI-subsystem build) — route to files instead.
+    d = _diag_log_dir()
+    if not d:
+        return
+    import os as _os
+
+    global _CRASH_LOG_FH
+    try:
+        _CRASH_LOG_FH = open(_os.path.join(d, "crash.log"), "a", buffering=1)
+        faulthandler.enable(file=_CRASH_LOG_FH, all_threads=True)
+    except Exception:
+        pass
+    try:
+        import logging as _logging
+
+        from butterpdf import identity as _ident
+
+        level = (_os.environ.get("BUTTERPDF_LOG_LEVEL") or "INFO").upper()
+        fh = _logging.FileHandler(_os.path.join(d, f"{_ident.app()}.log"))
+        fh.setFormatter(
+            _logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+        )
+        root = _logging.getLogger()
+        root.addHandler(fh)
+        root.setLevel(getattr(_logging, level, _logging.INFO))
+    except Exception:
+        pass
+
+
 def run_app(content_factory, *, identity=None, single_instance=True) -> int:
     """Boot a butterpdf app and run it to exit. Does the cross-platform Qt setup
     every warehaus app needs — HiDPI rounding, app identity, persisted theme
@@ -97,6 +177,11 @@ def run_app(content_factory, *, identity=None, single_instance=True) -> int:
     if identity:
         ident.configure(**identity)
 
+    # Crash/diagnostic logging first, so a native SIGSEGV during boot is still
+    # attributable (writes to files under a GUI-subsystem interpreter where
+    # stderr is None). Best-effort; never fatal.
+    _enable_faulthandler()
+
     _setup_hidpi()
     try:
         from butterpdf.windows_shortcut import set_process_app_user_model_id
@@ -104,6 +189,14 @@ def run_app(content_factory, *, identity=None, single_instance=True) -> int:
         set_process_app_user_model_id()
     except Exception:
         pass
+
+    # macOS: set the application-menu name BEFORE QApplication builds the native
+    # menu, so a from-source run reads the app name rather than "Python" (a frozen
+    # .app already gets it from CFBundleName). No-op off macOS.
+    if IS_MACOS:
+        from butterpdf import macos_menubar
+
+        macos_menubar.set_app_name()
 
     app = QApplication.instance() or QApplication(sys.argv)
     app.setApplicationName(ident.app())
@@ -116,16 +209,6 @@ def run_app(content_factory, *, identity=None, single_instance=True) -> int:
     # StartupWMClass should match (X11). Left as the bare slug until both DEs can
     # be smoke-tested on a real desktop — see docs/TODO.md (baking Beat 2 defer).
     app.setDesktopFileName(ident.app())
-
-    # KWin drag-repaint effect: kills the NVIDIA-EGL stale-blur "line artifact"
-    # smear left behind when dragging a blurred window (KWin bug 455526/457727).
-    # Idempotent + best-effort; a no-op off KDE Wayland.
-    try:
-        from butterpdf import drag_repaint
-
-        drag_repaint.sync()
-    except Exception:
-        pass
 
     # Single instance: hand off to the already-running copy rather than opening
     # a second window. Keep the lock object alive for the process lifetime.
@@ -169,7 +252,51 @@ def run_app(content_factory, *, identity=None, single_instance=True) -> int:
         si.raise_requested.connect(lambda: force_foreground(win))
     AppBus.get().open_main_window.connect(lambda: force_foreground(win))
 
+    # Persist any pending QSettings writes (window geometry, theme overrides, …)
+    # before the process exits. A hard quit that skips the window's closeEvent
+    # (e.g. app.quit() from a tray/menu) still reaches aboutToQuit — without
+    # this the most recent toggles are silently lost on the next launch.
+    def _flush_settings():
+        try:
+            get_settings().flush()
+        except Exception:
+            pass
+
+    app.aboutToQuit.connect(_flush_settings)
+
+    # macOS: the global menu bar (App/File/Edit/View/Window/Help) + native window
+    # chrome (transparent titlebar / full-size content view). Pure PySide6; only
+    # built on macOS, best-effort/no-op elsewhere.
+    if IS_MACOS:
+        from butterpdf import macos_menubar, macos_window
+
+        macos_menubar.install(win)
+        macos_window.apply(win)
+
+    # KDE Wayland borderless chrome: the main window stays server-side-decorated
+    # (so compositor blur survives a drag — a Qt-frameless window loses it) and a
+    # KWin `noborder` Force rule strips the visible decoration. Reconcile it BEFORE
+    # show so a fresh launch never flashes a titlebar; idempotent + self-healing, a
+    # no-op off KDE Wayland. `native_window_border` opts back into native chrome.
+    from butterpdf import noborder
+
+    if get_settings().native_window_border:
+        noborder.remove_main_window_noborder()
+    else:
+        noborder.install_main_window_noborder()
+
     win.show()
+
+    # KWin drag-repaint effect — installed AFTER show (off the first-paint path; it
+    # only matters once a drag begins). Forces KWin's full-repaint render path while
+    # one of the app's windows is dragged, killing the NVIDIA-EGL stale-blur "line
+    # artifact" (KWin bug 455526/457727). Idempotent, best-effort, a no-op off KDE
+    # Wayland; DOUGH_NO_DRAG_REPAINT=1 removes it instead (fork env vars stay DOUGH_
+    # until dough new / the sync gain an uppercase-env transform).
+    from butterpdf import drag_repaint
+
+    drag_repaint.sync()
+
     return app.exec()
 
 

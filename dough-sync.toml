@@ -1,0 +1,22 @@
+# dough→loaf sync manifest (see dough/dev/sync_loaf.py). Lives in the loaf.
+# Records the dough base relationship for `python dev/sync_loaf.py --loaf .`.
+
+# The dough commit this loaf was last reconciled against. butterPDF was scaffolded
+# from dough at 8d9610e (the `dough new` commit), before the first-looks backport
+# it drove. `--record` stamps this to dough HEAD after a sync.
+synced_from = "945a434"
+
+# Files (relative to the butterpdf/ package dir) the fork OWNS — net-new app code or
+# modules it fully rewrote. Sync never reads or writes these.
+authored = [
+    "viewer.py",              # the PDF viewer — butterPDF's net-new engine
+    "autostart/_flatpak.py",  # dough RETIRED Flatpak; this stale backend is deleted post-sync
+]
+
+# Files derived from dough but hand-customized. Sync shows dough's upstream diff
+# since `synced_from` so you port changes by hand (never blind-overwrites).
+manual = [
+    "app.py",       # butterPDF's run_app/main wires the PdfViewer + CLI + top_bar.bind_viewer
+    "top_bar.py",   # butterPDF's bind_viewer (Open menu + centered doc name) + density
+    "identity.py",  # display_name "butterPDF" — the whole-word transform would regress it
+]

@@ -164,12 +164,13 @@ exclude = ["tests*", "docs*", "packaging*"]
 # The brand SVG (butterpdf/assets/butterpdf.svg) ships in the wheel so make_app_icon
 # resolves it via importlib.resources.
 "butterpdf.assets" = ["*.svg"]
-# The drag-repaint KWin scripted effect ships as data (JSON + JS) inside the
-# butterpdf.drag_repaint package — installed into the user's KWin effects dir at
+# The drag-repaint KWin scripted effect ships as data (a JSON + JS template pair
+# carrying the {{app_id}} token) inside the butterpdf.drag_repaint package —
+# rendered from the app identity and installed into the user's KWin effects dir at
 # runtime by butterpdf/drag_repaint/_kwin.py.
 "butterpdf.drag_repaint" = [
-    "effect/butterpdf_dragrepaint/metadata.json",
-    "effect/butterpdf_dragrepaint/contents/code/main.js",
+    "effect/dragrepaint/metadata.json",
+    "effect/dragrepaint/contents/code/main.js",
 ]
 
 [tool.pytest.ini_options]

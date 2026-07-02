@@ -1,13 +1,16 @@
 """KWin scripted-effect backend for the drag-repaint fix.
 
-Installs butterpdf's bundled `butterpdf_dragrepaint` scripted effect
-into the user's KWin effects directory, flips its `kwinrc` enable key,
-and asks KWin to (re)load it — all idempotent, all best-effort.
+Installs butterpdf's bundled scripted effect into the user's KWin effects
+directory, flips its `kwinrc` enable key, and asks KWin to (re)load it —
+all idempotent, all best-effort.
 
-The effect itself is `effect/butterpdf_dragrepaint/` (a `metadata.json`
-+ `contents/code/main.js` pair), shipped as package data. `install()`
-copies it over any existing copy, so a butterpdf update refreshes the
-JS; `_reload_effect` then unload-then-loads so KWin re-reads it.
+The effect ships as an identity-agnostic **template** under
+`effect/dragrepaint/` (a `metadata.json` + `contents/code/main.js` pair, both
+carrying the ``{{app_id}}`` token). `install()` renders the token from the
+running app's identity (``butterpdf.identity.app()``) as it copies the effect into
+place, so a fork matches *its own* windows with no source edit and no `butterpdf
+new` re-namespacing — the effect id becomes ``{app}_dragrepaint``, and the
+JS scopes to the app's wmclass.
 
 Why copy-and-load rather than just write a `kwinrc` key: a freshly
 enabled effect isn't picked up until KWin is told to load it, and we
@@ -25,12 +28,25 @@ import shutil
 import subprocess
 from pathlib import Path
 
-# Effect id — must match KPlugin.Id in the bundled metadata.json and is
-# also the kwinrc [Plugins] key stem (`<id>Enabled`).
-_EFFECT_ID = "butterpdf_dragrepaint"
+from butterpdf import identity
 
-# Bundled source: butterpdf/drag_repaint/effect/butterpdf_dragrepaint/.
-_SOURCE_DIR = Path(__file__).resolve().parent / "effect" / _EFFECT_ID
+# The effect ships as a template (see module docstring); this token is
+# replaced with the app slug when the effect is rendered into place.
+_APP_ID_TOKEN = "{{app_id}}"
+
+# Bundled template source: butterpdf/drag_repaint/effect/dragrepaint/. The dir is
+# NOT app-named — the concrete id is derived from identity at install time.
+_SOURCE_DIR = Path(__file__).resolve().parent / "effect" / "dragrepaint"
+
+
+def _app_id() -> str:
+    return identity.app()
+
+
+def _effect_id() -> str:
+    """The rendered KWin plugin id — also the kwinrc [Plugins] key stem
+    (`<id>Enabled`) and the effects dir name. Derived from the live identity."""
+    return f"{_app_id()}_dragrepaint"
 
 
 def is_supported() -> bool:
@@ -41,10 +57,10 @@ def is_supported() -> bool:
 
 
 def install() -> bool:
-    """Idempotently install, enable, and load the effect. Copies the
-    bundled effect over any existing copy, sets the `kwinrc` key, and
-    asks KWin to reload. Returns True on success, False if unsupported
-    or the copy failed."""
+    """Idempotently install, enable, and load the effect. Renders the
+    bundled template into the user's effects dir (over any existing copy),
+    sets the `kwinrc` key, and asks KWin to reload. Returns True on success,
+    False if unsupported or the copy failed."""
     if not is_supported():
         return False
     dest = _dest_dir()
@@ -53,6 +69,7 @@ def install() -> bool:
             shutil.rmtree(dest)
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(_SOURCE_DIR, dest)
+        _render_identity(dest)
     except OSError:
         return False
     _set_enabled(True)
@@ -66,7 +83,7 @@ def uninstall() -> bool:
     False otherwise."""
     if not is_supported():
         return False
-    _effects_call("unloadEffect", _EFFECT_ID)
+    _effects_call("unloadEffect", _effect_id())
     _set_enabled(False)
     try:
         shutil.rmtree(_dest_dir())
@@ -81,7 +98,8 @@ def diagnose() -> dict:
     return {
         "backend": "kwin",
         "is_supported": is_supported(),
-        "effect_id": _EFFECT_ID,
+        "app_id": _app_id(),
+        "effect_id": _effect_id(),
         "source_dir": str(_SOURCE_DIR),
         "source_present": _SOURCE_DIR.is_dir(),
         "dest_dir": str(_dest_dir()),
@@ -93,6 +111,19 @@ def diagnose() -> dict:
 # ── internals ─────────────────────────────────────────────────────────
 
 
+def _render_identity(dest: Path) -> None:
+    """Replace the ``{{app_id}}`` token with the app slug in every rendered
+    file (metadata.json + main.js), so the installed effect carries the
+    concrete id / wmclass match. Only the two small text assets exist here."""
+    app_id = _app_id()
+    for path in dest.rglob("*"):
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8")
+        if _APP_ID_TOKEN in text:
+            path.write_text(text.replace(_APP_ID_TOKEN, app_id), encoding="utf-8")
+
+
 def _data_home() -> Path:
     """XDG_DATA_HOME, or its ~/.local/share default."""
     xdg = os.environ.get("XDG_DATA_HOME", "").strip()
@@ -100,7 +131,7 @@ def _data_home() -> Path:
 
 
 def _dest_dir() -> Path:
-    return _data_home() / "kwin" / "effects" / _EFFECT_ID
+    return _data_home() / "kwin" / "effects" / _effect_id()
 
 
 def _kwriteconfig_bin() -> str | None:
@@ -128,7 +159,7 @@ def _set_enabled(on: bool) -> None:
         subprocess.run(
             [
                 bin_, "--file", "kwinrc", "--group", "Plugins",
-                "--key", f"{_EFFECT_ID}Enabled", "true" if on else "false",
+                "--key", f"{_effect_id()}Enabled", "true" if on else "false",
             ],
             check=False,
             capture_output=True,
@@ -157,5 +188,5 @@ def _effects_call(method: str, *args: str) -> None:
 
 def _reload_effect() -> None:
     """Unload-then-load so a refreshed main.js is re-read by KWin."""
-    _effects_call("unloadEffect", _EFFECT_ID)
-    _effects_call("loadEffect", _EFFECT_ID)
+    _effects_call("unloadEffect", _effect_id())
+    _effects_call("loadEffect", _effect_id())
