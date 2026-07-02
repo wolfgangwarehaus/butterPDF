@@ -1,9 +1,36 @@
 # butterPDF — TODO / handoff
 
-Status as of **2026-07-02**. butterPDF is the **first loaf** baked with dough — the
-dogfood that drives dough's development. It has **MVP #1 (the QtPdf viewer)** + a deep
-first-looks polish loop (which drove dough's design backport). The full brief is
-`BRIEF.md`; the shared game plan lives in `../dough/docs/TODO.md`.
+## ▶ Wind-down 2026-07-02 — MVP v1 FEATURE-COMPLETE
+
+butterPDF is the **first loaf** baked with dough — the dogfood that drove dough's
+development. **All B milestones done + pushed** (`main` @ `92cf97b`, public at
+github.com/wolfgangwarehaus/butterPDF, CI green, 131 tests):
+
+- **B1 fill** — butterPDF's own rendered page view (`page_view.py`, exact coordinate
+  mapping for overlays); 6 **document backgrounds** (Auto/White/Light-grey/Dark-grey/OLED/
+  Transparent); **image-preserving smart dark mode** (`recolor` + pypdf image regions);
+  editable AcroForm field overlays (`pdf_forms.py` + `form_layer.py`); non-modal live Settings.
+- **B2 save/flatten** — `pdf_save.py`: pypdf fill w/ regenerated appearance streams (verified
+  in Adobe/browser) → pikepdf finalize (sanitize + stamp) → atomic write. Menu Save/Save As/
+  Flatten + Ctrl+S.
+- **B3 Quick-sign** — `signature.py`/`sign_dialog.py`/`sign_overlay.py`: draw (pen thickness+
+  colour) / type (script font) / import; place (drag/resize/delete); composited as an image
+  XObject w/ SMask on save.
+- **B4 converters** — `convert.py`: PDF→PNG/JPEG + images→PDF (img2pdf).
+- **B5 safe-open** — `safety.py`: inspect (active-content/XFA notice bar) + sanitize output.
+
+Deps: PySide6 + numpy + pypdf + pikepdf + img2pdf (installed here via `--break-system-packages`;
+declared in pyproject).
+
+**▶ Next session:** (1) the user's **thorough walkthrough + refinements** (known: signature
+UX polish, checkbox indicator sizing, whatever the walkthrough surfaces); (2) **first real
+release** through dough's Delivery matrix (Milestone C — needs dough's C1 Delivery helpers +
+`v0.1.0`). Fast-follow per BRIEF: cryptographic Verifiable-sign (PAdES via pyHanko). Sample
+form for smoke: `/tmp/butterpdf_sample_form.pdf` (regenerate if gone).
+
+---
+
+Original brief is `BRIEF.md`; the shared game plan lives in `../dough/docs/TODO.md`.
 
 ## The goal (settled 2026-07-02, with the user)
 
@@ -16,9 +43,9 @@ This arc is **interleaved and butterPDF-led**: every dough gap butterPDF hits ge
 `../dough/docs/TODO.md` for the dough-side tasks.
 
 ## Repo state
-- Branch `master`, **no git remote yet** — first job is `gh repo create` + push (task A3).
-- Forked from dough **2026-06-22, before the macOS absorption** → it's a diverged fork on
-  an older base. It'll catch up via the new dough→loaf sync tool (task A4), *not* a re-fork.
+- Branch `main`, public at github.com/wolfgangwarehaus/butterPDF (CI green).
+- Synced onto dough's current base via `dough-sync.toml` (synced_from `945a434`); pull future
+  base updates with `python ../dough/dev/sync_loaf.py --loaf .`.
 - Source at `/home/august/Projects/butterPDF/butterpdf/`. Viewer is `viewer.py`.
 
 ## ▶ Pick up here: the MVP engine (net-new, the wedge)
