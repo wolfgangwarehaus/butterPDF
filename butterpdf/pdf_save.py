@@ -45,11 +45,7 @@ def save_filled(
     # an overwrite-in-place can't corrupt the open file on a failure.
     tmp = f"{dest_path}.butterpdf.tmp"
     try:
-        if signatures:
-            _stamp_signatures(data, signatures, tmp)
-        else:
-            with open(tmp, "wb") as f:
-                f.write(data)
+        _finalize(data, signatures, tmp)
         os.replace(tmp, dest_path)
     except Exception:
         try:
@@ -59,19 +55,22 @@ def save_filled(
         raise
 
 
-def _stamp_signatures(pdf_bytes: bytes, signatures: list, dest_path: str) -> None:
-    """Bake each signature image into the page content as an image XObject (with a
-    soft-mask for its transparency), positioned by its point-rect."""
+def _finalize(pdf_bytes: bytes, signatures: list | None, dest_path: str) -> None:
+    """The pikepdf pass every save goes through: **sanitize** the output (strip
+    active content — see butterpdf.safety) and **stamp** any signatures as image
+    XObjects (soft-masked for transparency), then write."""
     import io
 
     import pikepdf
     from pikepdf import Name, Stream
 
     from butterpdf import signature as sig
+    from butterpdf.safety import sanitize_pdf
 
     pdf = pikepdf.open(io.BytesIO(pdf_bytes))
     try:
-        for page_index, rect_pt, image in signatures:
+        sanitize_pdf(pdf)  # never write a booby-trapped file back out
+        for page_index, rect_pt, image in signatures or []:
             if page_index < 0 or page_index >= len(pdf.pages):
                 continue
             page = pdf.pages[page_index]

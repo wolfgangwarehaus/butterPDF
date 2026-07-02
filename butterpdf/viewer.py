@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtPdf import QPdfDocument
 from PySide6.QtWidgets import (
@@ -91,6 +91,21 @@ class PdfViewer(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self._stack)
 
+        # A dismissible top notice bar (safe-open warnings, XFA decline). Overlays
+        # the content; click to dismiss, auto-hides after a few seconds.
+        self._notice = QLabel(self)
+        self._notice.setWordWrap(True)
+        self._notice.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self._notice.setStyleSheet(
+            f"QLabel{{background:rgba(196,120,24,0.95);color:#fff;"
+            f"padding:8px 14px;{type_qss(TYPE_BODY)}}}"
+        )
+        self._notice.hide()
+        self._notice.mousePressEvent = lambda _e: self._notice.hide()
+        self._notice_timer = QTimer(self)
+        self._notice_timer.setSingleShot(True)
+        self._notice_timer.timeout.connect(self._notice.hide)
+
         self._footer = self._make_footer()
         self._doc.statusChanged.connect(self._on_status_changed)
         self._view.current_page_changed.connect(lambda _p: self._update_page_label())
@@ -147,6 +162,42 @@ class PdfViewer(QWidget):
                 continue
             page.add_field(widget, fld.rect)
             self._field_widgets.append(widget)
+
+    # ── notice bar ───────────────────────────────────────────────────────────
+    def _show_notice(self, text: str) -> None:
+        self._notice.setText(f"{text}    (click to dismiss)")
+        self._place_notice()
+        self._notice.show()
+        self._notice.raise_()
+        self._notice_timer.start(10000)
+
+    def _place_notice(self) -> None:
+        self._notice.setFixedWidth(self.width())
+        self._notice.adjustSize()
+        self._notice.setFixedWidth(self.width())
+        self._notice.move(0, 0)
+
+    def resizeEvent(self, e) -> None:  # noqa: N802
+        super().resizeEvent(e)
+        if self._notice.isVisible():
+            self._place_notice()
+
+    def _check_safety(self) -> None:
+        """Flag active content / XFA on open so the user isn't silently exposed or
+        silently unable to fill. Best-effort — a clean PDF shows nothing."""
+        from butterpdf.safety import inspect
+
+        report = inspect(self._path or "")
+        if report.xfa:
+            self._show_notice(
+                "This is an XFA form — butterPDF views it and fills standard "
+                "AcroForm fields, but not XFA-specific fields."
+            )
+        elif report.active_content:
+            self._show_notice(
+                "This PDF contains active content (" + ", ".join(report.details)
+                + "). butterPDF never runs it, and strips it when you save."
+            )
 
     # ── converters ───────────────────────────────────────────────────────────
     def export_images(self, fmt: str = "png") -> None:
@@ -351,6 +402,7 @@ class PdfViewer(QWidget):
                 self._view.set_image_boxes(images.boxes_pt)
             self._build_form_fields()
             self._stack.setCurrentWidget(self._view)
+            self._check_safety()
             self.document_changed.emit(Path(self._path).name if self._path else "")
         elif status == QPdfDocument.Status.Error:
             if self._doc.error() == QPdfDocument.Error.IncorrectPassword:
