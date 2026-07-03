@@ -152,6 +152,37 @@ def _enable_faulthandler() -> None:
         pass
 
 
+def _reconcile_autostart() -> None:
+    """Re-assert an ENABLED launch-on-login entry at boot. ``enable()`` rewrites
+    the OS entry (XDG .desktop / Run key / LaunchAgent), self-healing a stale
+    ``Exec``/command after the executable or venv moved. Strictly opt-in: the
+    app never turns autostart ON — only the Settings toggle does; if it's off
+    or unsupported this is a no-op. Best-effort, never fatal."""
+    try:
+        from butterpdf import autostart
+
+        if autostart.is_supported() and autostart.is_enabled():
+            autostart.enable()
+    except Exception:
+        pass
+
+
+def _wire_notifications(bus) -> None:
+    """Route ``AppBus.notify`` (title, body) to the desktop-notification
+    backend. App code emits the signal from its real events with zero imports;
+    ``butterpdf.notifications`` no-ops where unsupported and never raises."""
+
+    def _notify(title: str, body: str = "") -> None:
+        try:
+            from butterpdf import notifications
+
+            notifications.notify(title, body)
+        except Exception:
+            pass
+
+    bus.notify.connect(_notify)
+
+
 def run_app(content_factory, *, identity=None, single_instance=True) -> int:
     """Boot a butterpdf app and run it to exit. Does the cross-platform Qt setup
     every warehaus app needs — HiDPI rounding, app identity, persisted theme
@@ -203,12 +234,15 @@ def run_app(content_factory, *, identity=None, single_instance=True) -> int:
     app.setApplicationDisplayName(ident.display_name())
     app.setOrganizationName(ident.org())
     app.setApplicationVersion(__version__)
-    # NOTE: the installed .desktop is named by the reverse-DNS app-id
-    # (io.github.{owner}.{app}), so for the Wayland taskbar to associate the
-    # window with its icon this should be ident.desktop_id(), and the .desktop's
-    # StartupWMClass should match (X11). Left as the bare slug until both DEs can
-    # be smoke-tested on a real desktop — see docs/TODO.md (baking Beat 2 defer).
-    app.setDesktopFileName(ident.app())
+    # The installed .desktop is named by the reverse-DNS app-id
+    # (io.github.{owner}.{app}), so the desktop file name must carry
+    # desktop_id() for the taskbar to associate the window with its installed
+    # icon. Verified live in dough (KDE, 2026-07-03): Wayland app_id = the id;
+    # X11 exports _KDE_NET_WM_DESKTOP_FILE while WM_CLASS stays the bare slug
+    # (which is why the .desktop's StartupWMClass keeps the slug). The KWin
+    # noborder rule + drag_repaint effect match the slug as a SUBSTRING, so
+    # both survive the app_id change.
+    app.setDesktopFileName(ident.desktop_id())
 
     # Single instance: hand off to the already-running copy rather than opening
     # a second window. Keep the lock object alive for the process lifetime.
@@ -274,6 +308,12 @@ def run_app(content_factory, *, identity=None, single_instance=True) -> int:
             pass
 
     app.aboutToQuit.connect(_flush_settings)
+
+    # Launch-on-login + desktop notifications — wired: autostart re-asserts an
+    # entry the user enabled (Settings toggle); AppBus.notify(title, body)
+    # reaches the OS notification backend. Both opt-in and best-effort.
+    _reconcile_autostart()
+    _wire_notifications(AppBus.get())
 
     # macOS: the global menu bar (App/File/Edit/View/Window/Help) + native window
     # chrome (transparent titlebar / full-size content view). Pure PySide6; only

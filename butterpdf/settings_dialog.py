@@ -117,6 +117,19 @@ class SettingsDialog(FrostedDialog):
         self.corners_check.toggled.connect(self._on_square_corners)
         self.content_layout.addWidget(self.corners_check)
 
+        # Launch on login — only offered when a platform backend can actually
+        # fulfil it (XDG autostart / Run key / StartupTask / LaunchAgent). The
+        # OS entry is the source of truth — no QSettings mirror to drift: the
+        # box reads is_enabled() and writes enable()/disable() directly.
+        from butterpdf import autostart
+
+        if autostart.is_supported():
+            self.content_layout.addWidget(self._label("SYSTEM"))
+            self.autostart_check = QCheckBox("Launch on login")
+            self.autostart_check.setChecked(autostart.is_enabled())
+            self.autostart_check.toggled.connect(self._on_autostart)
+            self.content_layout.addWidget(self.autostart_check)
+
         self._restart_note = QLabel("")
         self._restart_note.setStyleSheet(
             f"color: {ui_helpers.WARN_FG}; {type_qss(TYPE_CAPTION)}"
@@ -202,6 +215,17 @@ class SettingsDialog(FrostedDialog):
         set_square_corners(bool(on))
         self._apply_live()
         self._restart_note.setText("Square corners fully applies after a restart.")
+
+    def _on_autostart(self, on: bool) -> None:
+        from butterpdf import autostart
+
+        ok = autostart.enable() if on else autostart.disable()
+        if on and not ok:
+            # The backend refused (no launchable path, sandbox denial) — snap
+            # the box back to what the OS actually says rather than lying.
+            self.autostart_check.blockSignals(True)
+            self.autostart_check.setChecked(autostart.is_enabled())
+            self.autostart_check.blockSignals(False)
 
     def _on_document_bg(self, _idx: int) -> None:
         self.s.document_bg = self.doc_bg_sel.currentData()
