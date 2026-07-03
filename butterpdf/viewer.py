@@ -157,7 +157,7 @@ class PdfViewer(QWidget):
             page = self._view.page_widget(fld.page_index)
             if page is None:
                 continue
-            widget = make_field_widget(fld)
+            widget = make_field_widget(fld, self._page_is_dark())
             if widget is None:
                 continue
             page.add_field(widget, fld.rect)
@@ -351,13 +351,32 @@ class PdfViewer(QWidget):
         except Exception as exc:  # surface, never crash
             frosted_warning(self, "Couldn't save", f"Saving the PDF failed:\n{exc}")
 
+    def _page_is_dark(self) -> bool:
+        """Is the CURRENT page paper dark? Drives the input-fill family (dark
+        page → light grey, not plain white). Transparent paper follows the
+        app theme (the frosted backdrop behind the page)."""
+        from butterpdf.theme import get_active_theme
+
+        paper, _ = _resolve_doc_bg(get_settings().document_bg, get_active_theme().dark)
+        if paper is None:
+            return get_active_theme().dark
+        return paper.lightness() < 128
+
     def _apply_document_display(self) -> None:
         """Resolve the page paper + recolor from the 'Document background' setting
-        (which may follow the app theme) and push it to the view."""
+        (which may follow the app theme) and push it to the view — and re-stamp
+        every field widget's fill for the new page darkness, live."""
+        from butterpdf.form_layer import restyle_field_widget
         from butterpdf.theme import get_active_theme
 
         paper, recolor = _resolve_doc_bg(get_settings().document_bg, get_active_theme().dark)
         self._view.set_display(paper, recolor)
+        dark = self._page_is_dark()
+        for w in getattr(self, "_field_widgets", ()):
+            try:
+                restyle_field_widget(w, dark)
+            except RuntimeError:
+                continue  # a widget from a closed document
 
     # ── drag & drop ──────────────────────────────────────────────────────────
     def _dropped_pdf(self, event) -> str | None:

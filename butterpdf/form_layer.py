@@ -3,7 +3,9 @@
 The viewer anchors these over the rendered page (page_view.PageWidget.add_field)
 so a user can fill the real AcroForm fields in place. Widgets are deliberately
 styled as obvious inputs — a near-opaque light field with an accent border — so a
-fillable area reads clearly over either a light or a dark (inverted) page. The
+fillable area reads clearly over either a light or a dark (inverted) page. On a
+DARK page the fill is a soft light grey rather than plain white (user call:
+avoid pure white on dark) — still unmistakably an input, less glare. The
 originating :class:`~butterpdf.pdf_forms.FormField` is stashed on ``._field`` for
 the save step, and ``.value_str()`` reads the current widget value uniformly.
 """
@@ -22,13 +24,13 @@ class CheckField(QPushButton):
 
     MARK = "✕"
 
-    def __init__(self, field) -> None:
+    def __init__(self, field, dark_page: bool = False) -> None:
         super().__init__()
         self._field = field
         self.setCheckable(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setChecked(bool(field.on_value) and field.value == field.on_value)
-        self.setStyleSheet(_check_qss())
+        self.setStyleSheet(_check_qss(dark_page))
         self.toggled.connect(self._update_mark)
         self._update_mark()
 
@@ -42,42 +44,64 @@ class CheckField(QPushButton):
         self.setFont(f)
 
 
-def _text_qss() -> str:
+def _paper(dark_page: bool) -> tuple[str, str, str]:
+    """(base, focus, disabled) input fills. Light page → near-white; dark page →
+    the soft light-grey family (same paper as the signature canvas)."""
+    if dark_page:
+        return "rgba(233,235,239,0.96)", "#eef0f3", "rgba(233,235,239,0.55)"
+    return "rgba(255,255,255,0.94)", "#ffffff", "rgba(255,255,255,0.55)"
+
+
+def _text_qss(dark_page: bool = False) -> str:
     a = ui_helpers.ACCENT
+    base, focus, dis = _paper(dark_page)
     return (
-        f"QLineEdit{{background:rgba(255,255,255,0.94);border:1px solid {a};"
+        f"QLineEdit{{background:{base};border:1px solid {a};"
         f"border-radius:2px;color:#111;padding:0 4px;selection-background-color:{a};}}"
-        f"QLineEdit:focus{{border:2px solid {a};background:#ffffff;}}"
-        f"QLineEdit:disabled{{background:rgba(255,255,255,0.55);color:#555;}}"
+        f"QLineEdit:focus{{border:2px solid {a};background:{focus};}}"
+        f"QLineEdit:disabled{{background:{dis};color:#555;}}"
     )
 
 
-def _check_qss() -> str:
+def _check_qss(dark_page: bool = False) -> str:
     a = ui_helpers.ACCENT
+    base, _focus, dis = _paper(dark_page)
     return (
-        f"QPushButton{{background:rgba(255,255,255,0.94);border:1px solid {a};"
+        f"QPushButton{{background:{base};border:1px solid {a};"
         f"border-radius:2px;color:{a};font-weight:bold;padding:0;}}"
-        f"QPushButton:disabled{{background:rgba(255,255,255,0.55);color:#888;}}"
+        f"QPushButton:disabled{{background:{dis};color:#888;}}"
     )
 
 
-def _combo_qss() -> str:
+def _combo_qss(dark_page: bool = False) -> str:
     a = ui_helpers.ACCENT
+    base, _focus, _dis = _paper(dark_page)
     return (
-        f"QComboBox{{background:rgba(255,255,255,0.94);border:1px solid {a};"
+        f"QComboBox{{background:{base};border:1px solid {a};"
         f"border-radius:2px;color:#111;padding:0 4px;}}"
         f"QComboBox:focus{{border:2px solid {a};}}"
     )
 
 
-def make_field_widget(field) -> QWidget | None:
+def restyle_field_widget(w: QWidget, dark_page: bool) -> None:
+    """Re-stamp a field widget's QSS for the current page darkness — called when
+    the document background (or the theme driving 'auto') changes live."""
+    if isinstance(w, QLineEdit):
+        w.setStyleSheet(_text_qss(dark_page))
+    elif isinstance(w, QComboBox):
+        w.setStyleSheet(_combo_qss(dark_page))
+    elif isinstance(w, QPushButton):
+        w.setStyleSheet(_check_qss(dark_page))
+
+
+def make_field_widget(field, dark_page: bool = False) -> QWidget | None:
     """An editable widget for ``field`` (or None for a kind we don't fill yet).
     Carries ``._field``; read the current value with :func:`field_value`."""
     if field.kind == "text":
         w: QWidget = QLineEdit(field.value)
-        w.setStyleSheet(_text_qss())
+        w.setStyleSheet(_text_qss(dark_page))
     elif field.kind in ("checkbox", "radio"):
-        w = CheckField(field)
+        w = CheckField(field, dark_page)
     elif field.kind == "choice":
         w = QComboBox()
         w.addItems(field.options or [])
@@ -85,7 +109,7 @@ def make_field_widget(field) -> QWidget | None:
             i = w.findText(field.value)
             if i >= 0:
                 w.setCurrentIndex(i)
-        w.setStyleSheet(_combo_qss())
+        w.setStyleSheet(_combo_qss(dark_page))
     else:
         return None
 
