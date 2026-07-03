@@ -63,6 +63,21 @@ The MVP engine (B1–B5) is **done** — see the wind-down block at the top. Wha
 
 1. **The user's thorough walkthrough** (in person, real KDE Wayland) + whatever
    refinements it surfaces (known: signature UX polish, checkbox indicator sizing).
+   **2026-07-03 — the RIGGED half is done** (AI-driven on the live desktop): all 5
+   document backgrounds shot + reviewed (dark modes preserve images ✓), fill→save
+   verified (values + 5/5 regenerated /AP), flatten + PDF⇄PNG round trip + safe-open
+   all green via the real APIs. **Findings for the refinement list:**
+   - **R1 (real edge): checkbox visual can silently vanish on save** — a form whose
+     checkbox has NO usable on-state appearance stream (null /AP /N entries; the
+     rigged sample repros it) saves /V=/Yes correctly but renders UNCHECKED in other
+     viewers, while butterPDF's own ✕ overlay makes it look checked in-app. Fix idea:
+     at save, bake an ✕ appearance for any checked box whose on-state stream is
+     missing/empty (mirror the screen). Repro: /tmp/butterpdf_sample_form.pdf.
+   - **R2 (judgment call): field fills stay LIGHT in the dark document modes** —
+     bright blocks against an OLED page. Deliberate (editable = bright)? Or should
+     fills follow the page? August decides on the hands-on pass.
+   - pypdf's flatten leaves the 5 field objects in the AcroForm dict (appearance is
+     baked; interactivity in Adobe = August's cross-viewer check, artifacts sent).
 2. **C3 · first real release** through dough's Delivery matrix — needs dough's C1
    Delivery helpers + dough `v0.1.0`. See `../dough/docs/TODO.md` for the C plan.
 3. Fast-follow per BRIEF: cryptographic Verifiable-sign (PAdES via pyHanko).
