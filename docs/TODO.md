@@ -66,7 +66,15 @@ The MVP engine (B1–B5) is **done** — see the wind-down block at the top. Wha
    **2026-07-03 — the RIGGED half is done** (AI-driven on the live desktop): all 5
    document backgrounds shot + reviewed (dark modes preserve images ✓), fill→save
    verified (values + 5/5 regenerated /AP), flatten + PDF⇄PNG round trip + safe-open
-   all green via the real APIs. **Findings for the refinement list:**
+   all green via the real APIs.
+   **2026-07-03 evening — August drove the hands-on pass; the findings below were
+   FIXED live** (commits e075b26 + 354ac48): the ink rework (smooth quad paths,
+   DPR-crisp, no joint smear, tap-dots, light-grey paper — August: "signature is
+   better!"), R1 baked-✕ appearances (proven in the flattened render), R2 settled
+   (bright fields on dark stay), R3 CLI front (argparse help/version/PDF-guard),
+   R4 editable install run (README already documented it). STILL OPEN from the
+   walkthrough: the cross-viewer check of the saved PDFs + general feel verdicts.
+   **Original findings, for the record:**
    - **R1 (real edge): checkbox visual can silently vanish on save** — a form whose
      checkbox has NO usable on-state appearance stream (null /AP /N entries; the
      rigged sample repros it) saves /V=/Yes correctly but renders UNCHECKED in other
