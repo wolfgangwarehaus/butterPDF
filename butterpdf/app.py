@@ -370,7 +370,27 @@ def _build_content(window) -> QWidget:
 
 
 def main() -> None:
-    """The default entry: boot butterPDF with the PDF viewer."""
+    """The default entry: boot butterPDF with the PDF viewer.
+
+    A tiny CLI front (walkthrough finding R3): before this, ``butterpdf
+    --help`` booted the app and tried to open "--help" as a file. argparse
+    handles help/version and validates the positional; the GUI still reads
+    the file from ``sys.argv`` (``_build_content``), unchanged."""
+    import argparse
+
+    from butterpdf import __version__, identity
+
+    parser = argparse.ArgumentParser(
+        prog=identity.app(),
+        description=f"{identity.display_name()} — open, fill, sign, done.",
+    )
+    parser.add_argument("file", nargs="?", help="a PDF to open")
+    parser.add_argument(
+        "--version", action="version", version=f"{identity.app()} {__version__}"
+    )
+    args = parser.parse_args()
+    if args.file and not args.file.lower().endswith(".pdf"):
+        parser.error(f"not a PDF: {args.file}")
     sys.exit(run_app(_build_content))
 
 
