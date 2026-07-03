@@ -77,8 +77,16 @@ def _text_files(root: Path):
 
 
 def _replace_in_tree(root: Path, pairs: list[tuple[str, str]]) -> None:
-    """Whole-word replace each (old → new) across every text file."""
+    """Whole-word replace each (old → new) across every text file, plus each
+    pair's UPPER_SNAKE env-var prefix (``BUTTERPDF_*`` → ``BUTTERPDF_*``) — ``_``
+    is a word character, so the ``\\b`` word pattern alone never reaches it.
+    Mirrored by dev/sync_loaf.py ``_make_transform``; keep the two in step."""
     patterns = [(re.compile(rf"\b{re.escape(old)}\b"), new) for old, new in pairs if old != new]
+    patterns += [
+        (re.compile(rf"\b{re.escape(old.upper())}_"), f"{new.upper()}_")
+        for old, new in pairs
+        if old != new and old.upper() != new.upper()
+    ]
     if not patterns:
         return
     for path in _text_files(root):
@@ -109,6 +117,12 @@ def _scaffold(root: Path, slug: str, display: str, new_org: str, new_owner: str,
     old_summary = sidecar["summary"]
     old_guid = sidecar["store_secrets_of_record"]["inno_appid_guid"]
 
+    # Read the loaf AGENTS.md template BEFORE the strip (it lives in dev/, which
+    # goes) — it's written to the root AFTER the identity replace, so its prose
+    # about butterpdf-the-base survives the whole-word butterpdf→slug rewrite.
+    agents_tpl_path = root / "dev" / "AGENTS.loaf.md"
+    agents_tpl = agents_tpl_path.read_text(encoding="utf-8") if agents_tpl_path.is_file() else None
+
     # 1. strip butterpdf's own dev scaffolding.
     for rel in _STRIP:
         _remove(root, rel)
@@ -122,6 +136,16 @@ def _scaffold(root: Path, slug: str, display: str, new_org: str, new_owner: str,
     # 3. whole-word identity replace across the tree (owner first — it's a superstring
     #    of org when they coincide, but escaped \b keeps them distinct anyway).
     _replace_in_tree(root, [(old_owner, new_owner), (old_org, new_org), (old_slug, slug)])
+
+    # 3.5 the fork's AGENTS.md — the AI front door. butterpdf's own copy talks about
+    #     building the BASE (and the replace above just mangled it anyway); the
+    #     loaf gets the app-oriented version from the template read in before
+    #     the strip.
+    if agents_tpl:
+        (root / "AGENTS.md").write_text(
+            agents_tpl.replace("{{slug}}", slug).replace("{{display}}", display),
+            encoding="utf-8",
+        )
 
     # 4. fix the fields the whole-word replace can't: the display name (it was set to
     #    the slug by the slug-replace), a freshly-minted immutable installer GUID, and

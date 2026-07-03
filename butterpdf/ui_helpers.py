@@ -161,7 +161,7 @@ def body_color_tuple(surface: str = "main") -> tuple:
 
     Reads the live active theme + the cached blur status, so it picks up a
     theme switch and a post-show blur re-probe for free. ``surface`` selects
-    main / mini / dialog. Does NOT apply the main window's DOUGH_OPAQUE override
+    main / mini / dialog. Does NOT apply the main window's BUTTERPDF_OPAQUE override
     (that's main-window-only; the caller handles it). Never raises."""
     from butterpdf import blur
     from butterpdf.theme import body_color_for, get_active_theme
@@ -176,7 +176,7 @@ def frosted_fallback_active() -> bool:
     surface would otherwise paint a flat near-opaque body and should instead
     paint the faux-frost backdrop (``butterpdf/blur/_faux_frost.py``). Shared by the
     main window and mini player so they fall back identically. (The main window
-    additionally suppresses it under the DOUGH_OPAQUE override.)"""
+    additionally suppresses it under the BUTTERPDF_OPAQUE override.)"""
     from butterpdf import blur
     from butterpdf.theme import get_active_theme
 
@@ -553,7 +553,7 @@ def refresh_theme() -> str:
     constant in place. Rebuilds and returns the new GLOBAL_STYLE so
     the caller can push it onto the QApplication. Pair with
     ``icons.refresh_theme()`` (to refresh ICON_ACCENT) and
-    ``PlayerBus.theme_changed.emit()`` (to notify subscribers).
+    ``AppBus.theme_changed.emit()`` (to notify subscribers).
 
     Module-level constants stay the same object identities — we mutate
     the names in place via ``globals()`` so any caller that did
@@ -1038,7 +1038,7 @@ def make_app_icon(size: int = 64) -> QPixmap:
 
 
 # ── Scrubbable slider ──────────────────────────────────────────────────────
-# Used by every slider that should "feel like a music player slider":
+# Used by every slider that should "feel tactile like a media-app slider":
 # clicking anywhere in the groove jumps to that value, dragging continues
 # to scrub. Stock QSlider only page-steps when you click off the handle,
 # which is the wrong default for progress / volume / seek bars.
@@ -1271,7 +1271,7 @@ def overlay_disc_qcolor(hover: bool = False) -> QColor:
 
 class CoverOverlayButton(IconButton):
     """Small circular button pinned to the bottom-right of its parent
-    widget — used by the now-playing surfaces to overlay a heart on
+    widget — used to overlay a small glyph badge on
     the album art. Repositions on parent resize and only shows while
     the cursor is hovering the cover.
 
@@ -1302,9 +1302,9 @@ class CoverOverlayButton(IconButton):
         self._apply_circle_style()
         # Re-tone the disc on a live theme switch (light disc on a
         # light theme, dark on a dark one).
-        from butterpdf.bus import AppBus as PlayerBus
+        from butterpdf.bus import AppBus
 
-        PlayerBus.get().theme_changed.connect(self._apply_circle_style)
+        AppBus.get().theme_changed.connect(self._apply_circle_style)
         self.hide()
         self._hide_timer = QTimer(self)
         self._hide_timer.setSingleShot(True)
@@ -1449,13 +1449,13 @@ class EmptyState(QWidget):
         # Per-surface re-stamp contract; see architecture_live_accent.md.
         # PySide6 auto-disconnects this bound-method slot when the widget is
         # destroyed, so call sites that recreate the overlay don't leak.
-        from butterpdf.bus import AppBus as PlayerBus
+        from butterpdf.bus import AppBus
 
-        PlayerBus.get().theme_changed.connect(self._apply_styling)
+        AppBus.get().theme_changed.connect(self._apply_styling)
 
     def _apply_styling(self) -> None:
         """(Re-)stamp the per-widget QSS from the current theme tokens.
-        Called at construction and on every ``PlayerBus.theme_changed``.
+        Called at construction and on every ``AppBus.theme_changed``.
         Reads the ui_helpers module-level tokens by name so each call
         picks up the values ``refresh_theme()`` rebound in place."""
         from butterpdf.design_tokens import TYPE_BODY, TYPE_CAPTION, type_qss

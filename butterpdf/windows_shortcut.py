@@ -19,7 +19,7 @@ the post-show boot hook:
 
 Best-effort and idempotent: a marker file next to the .ico records the
 exe the shortcut was last written for, so boots after the first are a
-couple of ``Path.exists()`` calls. ``DOUGH_NO_START_MENU_SHORTCUT=1`` opts
+couple of ``Path.exists()`` calls. ``BUTTERPDF_NO_START_MENU_SHORTCUT=1`` opts
 out (and a source-checkout ``python -m butterpdf`` run has no launcher
 exe to target, so it never fires there).
 """
@@ -169,7 +169,7 @@ _APPID_CSHARP = """
 using System;
 using System.Runtime.InteropServices;
 
-namespace JT {
+namespace Shortcut {
   [StructLayout(LayoutKind.Sequential, Pack = 4)]
   public struct PropertyKey {
     public Guid fmtid; public uint pid;
@@ -228,7 +228,7 @@ namespace JT {
 # _write_shortcut so the marker is only written when the stamp actually
 # landed (a half-success — .lnk authored but property unstamped — would
 # otherwise mark "current" and never retry, leaving the generic icon).
-_STAMP_SENTINEL = "DOUGH_STAMP_OK"
+_STAMP_SENTINEL = "BUTTERPDF_STAMP_OK"
 
 
 def _shortcut_script(lnk: Path, exe: Path, ico: Path) -> str:
@@ -245,7 +245,7 @@ def _shortcut_script(lnk: Path, exe: Path, ico: Path) -> str:
         f"$s.Description = {_ps_quote(identity.display_name())};\n"
         "$s.Save();\n"
         f"Add-Type -TypeDefinition @'\n{_APPID_CSHARP}\n'@;\n"
-        f"[JT.Lnk]::SetAppId({_ps_quote(lnk)}, '{_aumid()}');\n"
+        f"[Shortcut.Lnk]::SetAppId({_ps_quote(lnk)}, '{_aumid()}');\n"
         f"Write-Output '{_STAMP_SENTINEL}'"
     )
 
@@ -326,7 +326,7 @@ def sync() -> None:
     is a few ms of QPixmap work; the PowerShell .lnk authoring is
     dispatched to the shared pool. No-op off Windows, when opted out,
     on a no-exe launch, or when everything is already current."""
-    if not IS_WINDOWS or os.environ.get("DOUGH_NO_START_MENU_SHORTCUT"):
+    if not IS_WINDOWS or os.environ.get("BUTTERPDF_NO_START_MENU_SHORTCUT"):
         return
     exe = _launcher_exe()
     if exe is None:

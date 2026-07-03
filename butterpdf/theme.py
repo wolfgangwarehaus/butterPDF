@@ -21,7 +21,7 @@ in `THEMES`. `ui_helpers.py` reads `get_active_theme()` once at import
 and re-exports its colors as module-level constants for back-compat.
 
 Live theme switching IS wired: ``ui_helpers.refresh_theme()`` re-reads every
-token in place and a ``PlayerBus.theme_changed`` emit re-stamps the whole app,
+token in place and a ``AppBus.theme_changed`` emit re-stamps the whole app,
 so a theme-mode change — and the OS-driven ``"auto"`` (follow-OS) swap — applies
 with no restart. Only ``font_scale`` still needs a relaunch.
 """
@@ -49,7 +49,7 @@ _WIN_BODY_FLOOR_ALPHA = 16
 # barely showed over the lighter Acrylic backdrop. Default to a clearly darker
 # glass (96, ~38%) so the dark theme reads as dark on Windows while staying
 # translucent enough for the Acrylic blur to show through. Tune live with
-# DOUGH_WIN_GLASS_ALPHA, then bake the value you like.
+# BUTTERPDF_WIN_GLASS_ALPHA, then bake the value you like.
 _WIN_BODY_DEFAULT_ALPHA = 96
 
 
@@ -58,9 +58,9 @@ def _win_glass_alpha() -> int:
     ``_WIN_BODY_DEFAULT_ALPHA`` (dark but translucent) and is clamped to
     ``[_WIN_BODY_FLOOR_ALPHA, 255]`` — the floor keeps every pixel hit-testable
     (a 0-alpha frameless body is click-through). Env-tunable both directions:
-    ``DOUGH_WIN_GLASS_ALPHA=40`` (lighter) … ``=160`` (heavier)."""
+    ``BUTTERPDF_WIN_GLASS_ALPHA=40`` (lighter) … ``=160`` (heavier)."""
     try:
-        v = int(os.environ.get("DOUGH_WIN_GLASS_ALPHA", str(_WIN_BODY_DEFAULT_ALPHA)))
+        v = int(os.environ.get("BUTTERPDF_WIN_GLASS_ALPHA", str(_WIN_BODY_DEFAULT_ALPHA)))
     except ValueError:
         v = _WIN_BODY_DEFAULT_ALPHA
     return max(_WIN_BODY_FLOOR_ALPHA, min(255, v))
@@ -70,7 +70,7 @@ def _win_glass_alpha() -> int:
 # shared ~67% glass body (172) reads noticeably more opaque on macOS than on
 # Linux — same number, denser backdrop. Cap the macOS body alpha lower so the
 # vibrancy reads through and the window matches the KWin glass feel; 110 (~43%)
-# was tuned by eye against KDE Plasma's blur. Tune live with DOUGH_MAC_GLASS_ALPHA.
+# was tuned by eye against KDE Plasma's blur. Tune live with BUTTERPDF_MAC_GLASS_ALPHA.
 _MAC_BODY_DEFAULT_ALPHA = 110
 
 
@@ -81,9 +81,9 @@ def _mac_glass_alpha() -> int:
     never goes fully transparent. Applied as ``min(theme glass alpha, this)`` in
     body_color_for, so it only ever LIGHTENS the body — the effective ceiling is
     the theme's own alpha (172 dark / 140 light), never 255. Env-tunable:
-    ``DOUGH_MAC_GLASS_ALPHA=90`` (lighter) … toward the theme base (heavier)."""
+    ``BUTTERPDF_MAC_GLASS_ALPHA=90`` (lighter) … toward the theme base (heavier)."""
     try:
-        v = int(os.environ.get("DOUGH_MAC_GLASS_ALPHA", str(_MAC_BODY_DEFAULT_ALPHA)))
+        v = int(os.environ.get("BUTTERPDF_MAC_GLASS_ALPHA", str(_MAC_BODY_DEFAULT_ALPHA)))
     except ValueError:
         v = _MAC_BODY_DEFAULT_ALPHA
     return max(_WIN_BODY_FLOOR_ALPHA, min(255, v))
@@ -566,7 +566,7 @@ def get_active_theme() -> Theme:
     ``theme_mode == "auto"`` follows the OS light/dark setting, resolving
     to ``frosted_light`` / ``frosted_dark`` via ``os_color_scheme()``. Theme
     + accent are read live: ``ui_helpers.refresh_theme()`` + a
-    ``PlayerBus.theme_changed`` emit re-stamp the whole app, so a theme (or
+    ``AppBus.theme_changed`` emit re-stamp the whole app, so a theme (or
     OS-scheme) change applies without a restart.
     """
     from dataclasses import replace as _replace

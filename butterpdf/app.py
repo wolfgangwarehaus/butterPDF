@@ -111,7 +111,7 @@ def _enable_faulthandler() -> None:
     which would both kill the app before ``app.exec()`` AND leave a windowed
     build's crash with zero trace. So there we instead point faulthandler at a
     ``crash.log`` file and attach a file log (``{app}.log``, level from
-    ``DOUGH_LOG_LEVEL``, default INFO) the user can hand back."""
+    ``BUTTERPDF_LOG_LEVEL``, default INFO) the user can hand back."""
     import faulthandler
 
     if sys.stderr is not None:
@@ -302,8 +302,7 @@ def run_app(content_factory, *, identity=None, single_instance=True) -> int:
     # only matters once a drag begins). Forces KWin's full-repaint render path while
     # one of the app's windows is dragged, killing the NVIDIA-EGL stale-blur "line
     # artifact" (KWin bug 455526/457727). Idempotent, best-effort, a no-op off KDE
-    # Wayland; DOUGH_NO_DRAG_REPAINT=1 removes it instead (fork env vars stay DOUGH_
-    # until dough new / the sync gain an uppercase-env transform).
+    # Wayland; BUTTERPDF_NO_DRAG_REPAINT=1 removes it instead.
     from butterpdf import drag_repaint
 
     drag_repaint.sync()

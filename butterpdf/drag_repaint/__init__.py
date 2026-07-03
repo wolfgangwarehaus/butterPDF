@@ -14,7 +14,7 @@ Public API:
     is_supported() -> bool   # backend can install the effect
     install() -> bool        # idempotent install + enable + load
     uninstall() -> bool      # idempotent unload + disable + remove
-    sync() -> bool           # install (or, under DOUGH_NO_DRAG_REPAINT,
+    sync() -> bool           # install (or, under BUTTERPDF_NO_DRAG_REPAINT,
                              #   uninstall) — the one call boot makes
     diagnose() -> dict       # backend-specific debug snapshot
 
@@ -24,7 +24,7 @@ and asks KWin to load it. Anywhere else (X11, Windows, macOS, non-KDE
 Wayland): the unsupported backend no-ops — the artifact is a KWin/NVIDIA-
 specific bug and the fix is too.
 
-`DOUGH_NO_DRAG_REPAINT=1` forces `sync()` to remove the effect instead of
+`BUTTERPDF_NO_DRAG_REPAINT=1` forces `sync()` to remove the effect instead of
 installing it — a support escape hatch, not a user-facing setting.
 """
 
@@ -57,9 +57,9 @@ def uninstall() -> bool:
 
 def sync() -> bool:
     """Reconcile the effect with what's wanted: install it, unless
-    ``DOUGH_NO_DRAG_REPAINT=1`` is set, in which case remove it. Call once
+    ``BUTTERPDF_NO_DRAG_REPAINT=1`` is set, in which case remove it. Call once
     at startup. A no-op off KDE Wayland."""
-    if os.environ.get("DOUGH_NO_DRAG_REPAINT") == "1":
+    if os.environ.get("BUTTERPDF_NO_DRAG_REPAINT") == "1":
         return uninstall()
     return install()
 

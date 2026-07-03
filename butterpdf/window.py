@@ -387,7 +387,7 @@ class AppWindow(QMainWindow):
     def _faux_frost_active(self) -> bool:
         """True when we should paint the faux-frost texture behind the body: a
         frosted theme whose real compositor blur is NOT active, and not the
-        opaque override (``DOUGH_OPAQUE``, main-window-only). Replaces the flat
+        opaque override (``BUTTERPDF_OPAQUE``, main-window-only). Replaces the flat
         near-opaque panel with the frosted material."""
         from butterpdf import blur, ui_helpers
 

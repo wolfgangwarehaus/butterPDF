@@ -79,17 +79,17 @@ else:  # pragma: no cover
 # Blur-effect toggle.
 _status_cache: BlurStatus | None = None
 
-# Debug override: DOUGH_BLUR_FORCE=active|unverifiable|unsupported pins the
+# Debug override: BUTTERPDF_BLUR_FORCE=active|unverifiable|unsupported pins the
 # reported status, bypassing the probe. Lets you eyeball the near-opaque
-# fallback body (DOUGH_BLUR_FORCE=unsupported) without disabling the
+# fallback body (BUTTERPDF_BLUR_FORCE=unsupported) without disabling the
 # compositor's Blur effect, and the reverse on a box where blur is off.
-# Same JT_* debug-switch family as DOUGH_OPAQUE.
-_FORCE = os.environ.get("DOUGH_BLUR_FORCE", "").strip().lower()
+# Same JT_* debug-switch family as BUTTERPDF_OPAQUE.
+_FORCE = os.environ.get("BUTTERPDF_BLUR_FORCE", "").strip().lower()
 
 
 def opaque_mode_active() -> bool:
     """Dev diagnostic: fully-opaque chrome — no translucency, no blur — via the
-    ``DOUGH_OPAQUE=1`` env switch. When on, :func:`status` reports UNSUPPORTED (so
+    ``BUTTERPDF_OPAQUE=1`` env switch. When on, :func:`status` reports UNSUPPORTED (so
     frosted bodies + popups use their near-opaque fallback) and :func:`apply`
     skips requesting compositor blur.
 
@@ -97,9 +97,9 @@ def opaque_mode_active() -> bool:
     can't get real blur already falls back to a near-opaque body automatically
     (status() → UNSUPPORTED/REQUESTED_UNVERIFIABLE), which covers the real user
     need; the old Settings toggle additionally dropped WA_TranslucentBackground
-    and broke the window's rounded corners, so it was removed. DOUGH_OPAQUE stays
+    and broke the window's rounded corners, so it was removed. BUTTERPDF_OPAQUE stays
     for the screencast / streaming-flicker repro it was born for. Never raises."""
-    return os.environ.get("DOUGH_OPAQUE") == "1"
+    return os.environ.get("BUTTERPDF_OPAQUE") == "1"
 
 
 def is_supported() -> bool:
@@ -185,7 +185,7 @@ def status(*, force: bool = False) -> BlurStatus:
         except ValueError:
             forced = None  # unrecognised value → ignore, probe normally
         # status() reports a machine capability and never returns DISABLED
-        # (that's the theme's call) — so DOUGH_BLUR_FORCE=disabled is ignored.
+        # (that's the theme's call) — so BUTTERPDF_BLUR_FORCE=disabled is ignored.
         if forced is not None and forced is not BlurStatus.DISABLED:
             return forced
     if _status_cache is not None and not force:

@@ -4,7 +4,7 @@
 # The dough commit this loaf was last reconciled against. butterPDF was scaffolded
 # from dough at 8d9610e (the `dough new` commit), before the first-looks backport
 # it drove. `--record` stamps this to dough HEAD after a sync.
-synced_from = "945a434"
+synced_from = "3d38e00"
 
 # Files (relative to the butterpdf/ package dir) the fork OWNS — net-new app code or
 # modules it fully rewrote. Sync never reads or writes these.
@@ -15,8 +15,14 @@ authored = [
 
 # Files derived from dough but hand-customized. Sync shows dough's upstream diff
 # since `synced_from` so you port changes by hand (never blind-overwrites).
+# LESSON (2026-07-03): add a file HERE the moment you hand-customize it — the
+# 07-03 sync blind-overwrote settings.py + settings_dialog.py (document_bg, the
+# non-modal dialog, a QSS fix) because they weren't listed. Review `git diff`
+# after every --apply before committing.
 manual = [
     "app.py",       # butterPDF's run_app/main wires the PdfViewer + CLI + top_bar.bind_viewer
     "top_bar.py",   # butterPDF's bind_viewer (Open menu + centered doc name) + density
     "identity.py",  # display_name "butterPDF" — the whole-word transform would regress it
+    "settings.py",         # + document_bg (the PDF page-background mode, B1)
+    "settings_dialog.py",  # non-modal + the DOCUMENT BACKGROUND selector (B1)
 ]
