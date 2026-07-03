@@ -73,6 +73,9 @@ butterpdf = "butterpdf.app:main"
 butterpdf-bake = "butterpdf.bake:main"
 # The entry verb for building WITH butterpdf: scaffold a fresh OWNED app from a clone.
 butterpdf-new = "butterpdf.scaffold:main"
+# The Delivery-phase walkthroughs: the channel board, per-channel activation,
+# and the update lap (dough docs/DELIVERY.md).
+butterpdf-deliver = "butterpdf.deliver:main"
 
 [project.urls]
 Homepage = "https://github.com/wolfgangwarehaus/butterpdf"
