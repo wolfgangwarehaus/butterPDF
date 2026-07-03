@@ -31,9 +31,13 @@ def save_filled(
 
     from pypdf import PdfWriter
 
-    # 1. Fill the form (pypdf) into a memory buffer.
+    # 1. Fill the form (pypdf) into a memory buffer. Checkbox appearances are
+    # repaired FIRST (some forms ship empty/null on-state streams — the value
+    # would save correctly but render unchecked everywhere else), so the fill
+    # and a flatten both see a real appearance to carry.
     writer = PdfWriter(clone_from=src_path)
     if values:
+        _ensure_checkbox_appearances(writer, values)
         writer.update_page_form_field_values(
             list(writer.pages), values, auto_regenerate=False, flatten=flatten,
         )
@@ -53,6 +57,79 @@ def save_filled(
         except OSError:
             pass
         raise
+
+
+def _ensure_checkbox_appearances(writer, values: dict[str, str]) -> None:
+    """Give every checkbox being set to an on-state a REAL appearance stream.
+
+    A checked box only shows outside butterPDF if its widget's ``/AP /N
+    /<on-state>`` entry is a drawable form XObject. Some generators emit null
+    or empty entries — the value round-trips, the mark silently vanishes in
+    other viewers (walkthrough finding R1). For those widgets we bake the same
+    ✕ the on-screen editor shows. Usable existing appearances are left alone.
+    """
+    from pypdf.generic import (
+        ArrayObject,
+        DecodedStreamObject,
+        DictionaryObject,
+        FloatObject,
+        NameObject,
+        StreamObject,
+    )
+
+    on_states = {
+        name: v for name, v in values.items()
+        if isinstance(v, str) and v.startswith("/") and v != "/Off"
+    }
+    if not on_states:
+        return
+
+    def _field_name(annot) -> str | None:
+        t = annot.get("/T")
+        if t is None and annot.get("/Parent") is not None:
+            t = annot["/Parent"].get_object().get("/T")
+        return str(t) if t is not None else None
+
+    def _usable(entry) -> bool:
+        obj = entry.get_object() if entry is not None else None
+        return isinstance(obj, StreamObject) and bool(obj.get_data().strip())
+
+    for page in writer.pages:
+        for ref in page.get("/Annots") or []:
+            annot = ref.get_object()
+            if annot.get("/FT") != "/Btn":
+                continue
+            name = _field_name(annot)
+            state = on_states.get(name or "")
+            if state is None:
+                continue
+            ap = annot.get("/AP")
+            n = ap.get_object().get("/N") if ap is not None else None
+            if n is not None and _usable(n.get_object().get(state)):
+                continue  # the form brought a real appearance — keep it
+            x1, y1, x2, y2 = (float(v) for v in annot["/Rect"])
+            w, h = abs(x2 - x1), abs(y2 - y1)
+            inset, lw = 0.20, max(1.2, 0.10 * min(w, h))
+            xa, ya, xb, yb = w * inset, h * inset, w * (1 - inset), h * (1 - inset)
+            xo = DecodedStreamObject()
+            xo.set_data(
+                f"q {lw:.2f} w 0.13 0.15 0.19 RG 1 J "
+                f"{xa:.2f} {ya:.2f} m {xb:.2f} {yb:.2f} l S "
+                f"{xa:.2f} {yb:.2f} m {xb:.2f} {ya:.2f} l S Q".encode("ascii")
+            )
+            xo[NameObject("/Type")] = NameObject("/XObject")
+            xo[NameObject("/Subtype")] = NameObject("/Form")
+            xo[NameObject("/BBox")] = ArrayObject(
+                [FloatObject(0), FloatObject(0), FloatObject(w), FloatObject(h)]
+            )
+            stream_ref = writer._add_object(xo)
+            if ap is None or not isinstance(ap.get_object(), DictionaryObject):
+                annot[NameObject("/AP")] = DictionaryObject()
+                ap = annot["/AP"]
+            ap_dict = ap.get_object()
+            if not isinstance(ap_dict.get("/N"), DictionaryObject):
+                ap_dict[NameObject("/N")] = DictionaryObject()
+            ap_dict["/N"][NameObject(state)] = stream_ref
 
 
 def _finalize(pdf_bytes: bytes, signatures: list | None, dest_path: str) -> None:

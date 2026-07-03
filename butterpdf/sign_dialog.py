@@ -6,8 +6,8 @@ viewer then places on the page. Frameless + frosted to match the app.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QPoint, Qt
-from PySide6.QtGui import QColor, QImage, QPainter, QPen
+from PySide6.QtCore import QPoint, QPointF, Qt
+from PySide6.QtGui import QColor, QImage, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
@@ -27,18 +27,82 @@ from butterpdf.selector import Selector, selector_qss
 _INK = QColor(20, 24, 40)
 
 
+def _smooth_stroke_path(pts: list[QPointF]) -> QPainterPath:
+    """One continuous path through a stroke's samples: quadratic curves through
+    segment midpoints (the standard ink-smoothing construction). Straight
+    ``lineTo`` between raw mouse samples is what makes fast strokes polygonal."""
+    path = QPainterPath(pts[0])
+    if len(pts) < 3:
+        path.lineTo(pts[-1])
+        return path
+    for i in range(1, len(pts) - 1):
+        mid = (pts[i] + pts[i + 1]) / 2
+        path.quadTo(pts[i], mid)
+    path.lineTo(pts[-1])
+    return path
+
+
 class InkCanvas(QWidget):
-    """A draw-your-signature surface. Free-hand strokes on a transparent image."""
+    """A draw-your-signature surface. Free-hand strokes on a transparent image.
+
+    The ink quality rules live here (each fixes a visible artifact):
+    * samples stay float ``QPointF`` — never rounded to pixels;
+    * a stroke renders as ONE smoothed path (``_smooth_stroke_path``), not
+      per-segment ``drawLine`` stamps — those double-stamp round caps at every
+      joint and smear the corners;
+    * the backing image is allocated at the device pixel ratio, so a HiDPI
+      screen gets real pixels instead of an upscale blur — and the exported
+      signature bakes into the PDF at the same crisp resolution.
+    """
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setMinimumSize(520, 180)
-        self._img = QImage(self.size(), QImage.Format.Format_ARGB32)
-        self._img.fill(Qt.GlobalColor.transparent)
-        self._last: QPoint | None = None
+        self._img = self._blank_image()
+        self._stroke: list[QPointF] = []  # the in-flight stroke, drawn live
         self._drawn = False
         self._pen_width = 2.6
         self._ink = QColor(_INK)
+
+    # ── ink plumbing ──────────────────────────────────────────────────────
+    def _blank_image(self) -> QImage:
+        dpr = self.devicePixelRatioF() or 1.0
+        img = QImage(
+            max(1, round(self.width() * dpr)),
+            max(1, round(self.height() * dpr)),
+            QImage.Format.Format_ARGB32_Premultiplied,
+        )
+        img.setDevicePixelRatio(dpr)
+        img.fill(Qt.GlobalColor.transparent)
+        return img
+
+    def _pen(self) -> QPen:
+        pen = QPen(self._ink, self._pen_width)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        return pen
+
+    def _paint_stroke(self, p: QPainter) -> None:
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setPen(self._pen())
+        if len(self._stroke) == 1:  # a tap — an i-dot / t-cross deserves ink too
+            p.setBrush(self._ink)
+            r = max(0.6, self._pen_width / 2)
+            p.setPen(Qt.PenStyle.NoPen)
+            p.drawEllipse(self._stroke[0], r, r)
+        else:
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawPath(_smooth_stroke_path(self._stroke))
+
+    def _bake_stroke(self) -> None:
+        """Finish the in-flight stroke: render it ONCE into the backing image."""
+        if not self._stroke:
+            return
+        p = QPainter(self._img)
+        self._paint_stroke(p)
+        p.end()
+        self._stroke = []
+        self._drawn = True
 
     def set_pen_width(self, w: float) -> None:
         self._pen_width = max(0.5, float(w))
@@ -46,55 +110,55 @@ class InkCanvas(QWidget):
     def set_ink(self, color: QColor) -> None:
         self._ink = QColor(color)
 
+    # ── events ────────────────────────────────────────────────────────────
     def resizeEvent(self, e) -> None:  # noqa: N802
-        new = QImage(self.size(), QImage.Format.Format_ARGB32)
-        new.fill(Qt.GlobalColor.transparent)
-        p = QPainter(new)
-        p.drawImage(0, 0, self._img)  # keep what's drawn
+        old = self._img
+        self._img = self._blank_image()
+        p = QPainter(self._img)
+        p.drawImage(QPoint(0, 0), old)  # keep what's drawn (logical coords)
         p.end()
-        self._img = new
 
     def mousePressEvent(self, e) -> None:  # noqa: N802
         if e.button() == Qt.MouseButton.LeftButton:
-            self._last = e.position().toPoint()
+            self._stroke = [e.position()]
+            self.update()
 
     def mouseMoveEvent(self, e) -> None:  # noqa: N802
-        if self._last is None:
+        if not self._stroke:
             return
-        p = QPainter(self._img)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        pen = QPen(self._ink, self._pen_width)
-        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-        p.setPen(pen)
-        now = e.position().toPoint()
-        p.drawLine(self._last, now)
-        p.end()
-        self._last = now
-        self._drawn = True
-        self.update()
+        pos = e.position()
+        # keep every meaningful sample; only drop sub-pixel jitter
+        if (pos - self._stroke[-1]).manhattanLength() >= 0.8:
+            self._stroke.append(pos)
+            self.update()
 
     def mouseReleaseEvent(self, e) -> None:  # noqa: N802
-        self._last = None
+        self._bake_stroke()
+        self.update()
 
     def paintEvent(self, e) -> None:  # noqa: N802
         p = QPainter(self)
-        # a subtle baseline + a soft frame so the canvas reads as a sign-here box
-        p.fillRect(self.rect(), QColor(255, 255, 255, 235))
+        # Soft light-grey paper — calmer against the dark chrome than pure
+        # white, still unmistakably a sign-here box — plus a frame + baseline.
+        p.fillRect(self.rect(), QColor(236, 238, 241, 244))
         p.setPen(QPen(QColor(0, 0, 0, 30)))
         p.drawRect(self.rect().adjusted(0, 0, -1, -1))
         y = int(self.height() * 0.72)
         p.setPen(QPen(QColor(0, 0, 0, 40)))
         p.drawLine(24, y, self.width() - 24, y)
-        p.drawImage(0, 0, self._img)
+        p.drawImage(QPoint(0, 0), self._img)
+        if self._stroke:  # the live stroke, smoothed, on top
+            self._paint_stroke(p)
         p.end()
 
     def clear(self) -> None:
         self._img.fill(Qt.GlobalColor.transparent)
+        self._stroke = []
         self._drawn = False
         self.update()
 
     def image(self) -> QImage | None:
+        self._bake_stroke()  # an accept mid-stroke still keeps the ink
         return signature.trim(self._img) if self._drawn else None
 
 

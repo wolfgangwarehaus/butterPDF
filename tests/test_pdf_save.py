@@ -109,3 +109,102 @@ def test_signature_is_baked_as_image_xobject(tmp_path):
     images = [v for v in xobjs.values() if str(v.get("/Subtype")) == "/Image"]
     assert images, "no image XObject stamped"
     assert any("/SMask" in v for v in images), "signature lost its transparency mask"
+
+
+# ── R1: checkbox appearances are repaired at save ────────────────────────────
+
+
+def _null_ap_checkbox_pdf(path):
+    """A form whose checkbox has NULL on-state appearances (the R1 repro shape:
+    the value saves, the mark renders nowhere else)."""
+    from pypdf import PdfWriter
+    from pypdf.generic import (
+        ArrayObject,
+        DictionaryObject,
+        FloatObject,
+        NameObject,
+        NullObject,
+        TextStringObject,
+    )
+
+    w = PdfWriter()
+    page = w.add_blank_page(width=300, height=300)
+    ap_n = DictionaryObject({NameObject("/Yes"): NullObject(), NameObject("/Off"): NullObject()})
+    chk = DictionaryObject({
+        NameObject("/Subtype"): NameObject("/Widget"),
+        NameObject("/FT"): NameObject("/Btn"),
+        NameObject("/T"): TextStringObject("agree"),
+        NameObject("/Rect"): ArrayObject([FloatObject(v) for v in (50, 250, 70, 270)]),
+        NameObject("/AS"): NameObject("/Off"),
+        NameObject("/AP"): DictionaryObject({NameObject("/N"): ap_n}),
+    })
+    ref = w._add_object(chk)
+    page[NameObject("/Annots")] = ArrayObject([ref])
+    w._root_object[NameObject("/AcroForm")] = DictionaryObject(
+        {NameObject("/Fields"): ArrayObject([ref])}
+    )
+    out = path / "nullap.pdf"
+    with open(out, "wb") as f:
+        w.write(f)
+    return str(out)
+
+
+def test_checked_box_gets_a_real_appearance_when_missing(tmp_path):
+    """R1: a checkbox with null on-state appearance gets a baked ✕ form
+    XObject at save — so the mark survives into other viewers."""
+    from pypdf import PdfReader
+    from pypdf.generic import StreamObject
+
+    src = _null_ap_checkbox_pdf(tmp_path)
+    dest = str(tmp_path / "out.pdf")
+    save_filled(src, dest, {"agree": "/Yes"})
+    r = PdfReader(dest)
+    annot = r.pages[0]["/Annots"][0].get_object()
+    entry = annot["/AP"]["/N"]["/Yes"].get_object()
+    assert isinstance(entry, StreamObject)
+    ops = entry.get_data().decode("ascii")
+    assert ops.count(" l S") == 2, "the baked appearance draws the two ✕ strokes"
+    assert str(annot["/V"]) == "/Yes"
+
+
+def test_existing_good_appearance_is_left_alone(tmp_path):
+    """A form that ships a REAL on-state stream keeps it byte-identical."""
+    from pypdf import PdfReader, PdfWriter
+    from pypdf.generic import (
+        ArrayObject,
+        DecodedStreamObject,
+        DictionaryObject,
+        FloatObject,
+        NameObject,
+        TextStringObject,
+    )
+
+    w = PdfWriter()
+    page = w.add_blank_page(width=300, height=300)
+    good = DecodedStreamObject()
+    good.set_data(b"q 1 0 0 RG 0 0 m 10 10 l S Q")  # a distinctive stroke
+    good[NameObject("/Type")] = NameObject("/XObject")
+    good[NameObject("/Subtype")] = NameObject("/Form")
+    good[NameObject("/BBox")] = ArrayObject([FloatObject(v) for v in (0, 0, 20, 20)])
+    ap_n = DictionaryObject({NameObject("/Yes"): w._add_object(good)})
+    chk = DictionaryObject({
+        NameObject("/Subtype"): NameObject("/Widget"),
+        NameObject("/FT"): NameObject("/Btn"),
+        NameObject("/T"): TextStringObject("agree"),
+        NameObject("/Rect"): ArrayObject([FloatObject(v) for v in (50, 250, 70, 270)]),
+        NameObject("/AS"): NameObject("/Off"),
+        NameObject("/AP"): DictionaryObject({NameObject("/N"): ap_n}),
+    })
+    ref = w._add_object(chk)
+    page[NameObject("/Annots")] = ArrayObject([ref])
+    w._root_object[NameObject("/AcroForm")] = DictionaryObject(
+        {NameObject("/Fields"): ArrayObject([ref])}
+    )
+    src = tmp_path / "goodap.pdf"
+    with open(src, "wb") as f:
+        w.write(f)
+
+    dest = str(tmp_path / "out.pdf")
+    save_filled(str(src), dest, {"agree": "/Yes"})
+    entry = PdfReader(dest).pages[0]["/Annots"][0].get_object()["/AP"]["/N"]["/Yes"].get_object()
+    assert entry.get_data() == b"q 1 0 0 RG 0 0 m 10 10 l S Q"
