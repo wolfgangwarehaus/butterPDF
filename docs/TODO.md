@@ -1,5 +1,13 @@
 # butterPDF — TODO / handoff
 
+## ▶ Audit 2026-07-03 — CI was quietly red; fixed
+
+Two CI defects found + fixed (details in `../dough/docs/TODO.md` §Audit 2026-07-03):
+`macos.yml` failed GitHub's parse on every push (`secrets` in a step `if:` → env-gated
+now), and `lint-and-smoke` was red since B1 (installed only `ruff PySide6` while the
+smoke imports numpy/pypdf → now `pip install ruff -e .`). Local health: 131 passed,
+ruff clean. The B1–B5 build list that used to sit below is done — see the wind-down.
+
 ## ▶ Wind-down 2026-07-02 — MVP v1 FEATURE-COMPLETE
 
 butterPDF is the **first loaf** baked with dough — the dogfood that drove dough's
@@ -43,30 +51,21 @@ This arc is **interleaved and butterPDF-led**: every dough gap butterPDF hits ge
 `../dough/docs/TODO.md` for the dough-side tasks.
 
 ## Repo state
-- Branch `main`, public at github.com/wolfgangwarehaus/butterPDF (CI green).
+- Branch `main`, public at github.com/wolfgangwarehaus/butterPDF (all workflows green
+  as of the 2026-07-03 CI fix — when claiming green, check EVERY workflow, not just `CI`).
 - Synced onto dough's current base via `dough-sync.toml` (synced_from `945a434`); pull future
   base updates with `python ../dough/dev/sync_loaf.py --loaf .`.
 - Source at `/home/august/Projects/butterPDF/butterpdf/`. Viewer is `viewer.py`.
 
-## ▶ Pick up here: the MVP engine (net-new, the wedge)
+## ▶ Pick up here: ship it (Milestone C)
 
-Per `BRIEF.md` §"Recommended feature set". Build in order — each is a task in the tracker:
+The MVP engine (B1–B5) is **done** — see the wind-down block at the top. What remains:
 
-1. **B1 · AcroForm fill** (pypdf) — Qt overlay widgets from field rects; checkbox states
-   matched to each widget's `/AP /N` export value; fills save INTO the doc. Add `pypdf`;
-   re-enable QtPdf in the PyInstaller spec if still excluded.
-2. **B2 · Correct save/flatten — the make-or-break** — regenerate appearance streams
-   (`auto_regenerate=False`) + explicit "Flatten for sending." **TEST the Adobe + print
-   round-trip.** `pikepdf` for structure/normalize. If this is wrong, butterPDF is "just
-   another viewer."
-3. **B3 · Quick-sign** — draw/type/import a reusable signature, composite onto the page
-   (zero PKI in v1; store in OS keychain). Cryptographic PAdES is the fast-follow.
-4. **B4 · Converters** — PDF→PNG/JPEG (QtPdf render) + JPEG/PNG→PDF (`img2pdf`, lossless).
-5. **B5 · Safe-open + XFA decline** — pikepdf sanitize (strip `/OpenAction`, `/AA`,
-   `/JavaScript`, `/Launch`, `/EmbeddedFiles`); malformed → toast, never a crash; detect
-   XFA and notify (graceful-decline).
-
-Then **C3 · first real release** through dough's Delivery matrix (uses dough's C1 helpers).
+1. **The user's thorough walkthrough** (in person, real KDE Wayland) + whatever
+   refinements it surfaces (known: signature UX polish, checkbox indicator sizing).
+2. **C3 · first real release** through dough's Delivery matrix — needs dough's C1
+   Delivery helpers + dough `v0.1.0`. See `../dough/docs/TODO.md` for the C plan.
+3. Fast-follow per BRIEF: cryptographic Verifiable-sign (PAdES via pyHanko).
 
 ## Stack (decided — licensing-clean, no AGPL)
 QtPdf (view) · pypdf (fill, BSD) · pikepdf (structure, MPL) · Qt ink→PNG→pikepdf
