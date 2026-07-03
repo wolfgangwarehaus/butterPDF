@@ -1,5 +1,15 @@
 # butterPDF — TODO / handoff
 
+## ▶ Resume here (after 2026-07-03 evening)
+
+The walkthrough refinements are LANDED (smooth ink — August-approved, baked ✕,
+light-grey fills on dark pages, the CLI front, the editable install; 172 tests,
+3-OS CI green). **Next: (1) the walkthrough's in-person tail — open
+`walk_flattened_v2.pdf` in Okular/Firefox (✕ visible, name baked, nothing
+editable) + drag/zoom/scroll feel verdicts; (2) C3 ship — `butterpdf-deliver`
+walks it (PyPI name `butterpdf` is FREE; needs the C2 call on dough's taken
+PyPI name + the first tag).**
+
 ## ▶ Audit 2026-07-03 — CI was quietly red; fixed
 
 Two CI defects found + fixed (details in `../dough/docs/TODO.md` §Audit 2026-07-03):
