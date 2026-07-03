@@ -78,6 +78,11 @@ The MVP engine (B1–B5) is **done** — see the wind-down block at the top. Wha
      fills follow the page? August decides on the hands-on pass.
    - pypdf's flatten leaves the 5 field objects in the AcroForm dict (appearance is
      baked; interactivity in Adobe = August's cross-viewer check, artifacts sent).
+   - **R3: no CLI front** — `butterpdf --help` opens the app and treats `--help` as a
+     file path. Add a tiny argparse (help/version/positional file) before release.
+   - **R4 (maker experience)**: the checkout had no install story until the editable
+     install landed 2026-07-03 (`pip install -e . --break-system-packages`) — running
+     your own loaf should be step zero; fold a dev-install line into the README/AGENTS.
 2. **C3 · first real release** through dough's Delivery matrix — needs dough's C1
    Delivery helpers + dough `v0.1.0`. See `../dough/docs/TODO.md` for the C plan.
 3. Fast-follow per BRIEF: cryptographic Verifiable-sign (PAdES via pyHanko).
