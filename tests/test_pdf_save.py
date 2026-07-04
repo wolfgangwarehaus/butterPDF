@@ -208,3 +208,33 @@ def test_existing_good_appearance_is_left_alone(tmp_path):
     save_filled(str(src), dest, {"agree": "/Yes"})
     entry = PdfReader(dest).pages[0]["/Annots"][0].get_object()["/AP"]["/N"]["/Yes"].get_object()
     assert entry.get_data() == b"q 1 0 0 RG 0 0 m 10 10 l S Q"
+
+
+def test_flatten_strips_the_interactive_layer(tmp_path):
+    """R5 (cross-viewer finding): flatten must remove the widgets AND the
+    AcroForm — pypdf's flatten flag alone left live, editable fields. The look
+    survives as page-content XObject stamps."""
+    from pypdf import PdfReader
+
+    src = _form_pdf(tmp_path)
+    out = tmp_path / "flat.pdf"
+    save_filled(src, str(out), {"fullname": "Ada", "agree": "/Yes"}, flatten=True)
+    r = PdfReader(str(out))
+    assert not (r.get_fields() or {}), "AcroForm gone — nothing editable anywhere"
+    annots = r.pages[0].get("/Annots") or []
+    assert len(annots) == 0, "widget annotations stripped"
+    content = r.pages[0].get_contents().get_data().decode("latin-1")
+    assert " Do " in content or content.rstrip().endswith("Do Q"), (
+        "the widgets' appearances were stamped into the page content"
+    )
+
+
+def test_unflattened_save_keeps_fields_editable(tmp_path):
+    from pypdf import PdfReader
+
+    src = _form_pdf(tmp_path)
+    out = tmp_path / "filled.pdf"
+    save_filled(src, str(out), {"fullname": "Ada"})
+    r = PdfReader(str(out))
+    assert set(r.get_fields() or {}) == {"fullname", "agree"}
+    assert len(r.pages[0]["/Annots"]) == 2

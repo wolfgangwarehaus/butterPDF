@@ -6,9 +6,12 @@ and on paper, not just in the app that wrote them. So we regenerate each field's
 ``/NeedAppearances`` (which many renderers, and most printers, ignore).
 
 ``save_filled`` clones the source, applies the values, and writes a new file.
-``flatten=True`` bakes the fields into the page content (no longer editable) for
-sending. Values: text/choice as strings; a checkbox/radio as its on-state name
-(e.g. ``"/Yes"``) or ``"/Off"``.
+``flatten=True`` REALLY flattens: each widget's appearance is stamped into the
+page content and the interactive layer (widgets + AcroForm) is stripped — a
+flattened file must not be editable in ANY viewer. (pypdf's ``flatten=`` flag
+alone leaves the live widgets in place — cross-viewer walkthrough finding R5 —
+so the true flatten happens in the pikepdf pass.) Values: text/choice as
+strings; a checkbox/radio as its on-state name (e.g. ``"/Yes"``) or ``"/Off"``.
 """
 
 from __future__ import annotations
@@ -39,7 +42,7 @@ def save_filled(
     if values:
         _ensure_checkbox_appearances(writer, values)
         writer.update_page_form_field_values(
-            list(writer.pages), values, auto_regenerate=False, flatten=flatten,
+            list(writer.pages), values, auto_regenerate=False,
         )
     buf = io.BytesIO()
     writer.write(buf)
@@ -49,7 +52,7 @@ def save_filled(
     # an overwrite-in-place can't corrupt the open file on a failure.
     tmp = f"{dest_path}.butterpdf.tmp"
     try:
-        _finalize(data, signatures, tmp)
+        _finalize(data, signatures, tmp, flatten=flatten)
         os.replace(tmp, dest_path)
     except Exception:
         try:
@@ -132,10 +135,64 @@ def _ensure_checkbox_appearances(writer, values: dict[str, str]) -> None:
             ap_dict["/N"][NameObject(state)] = stream_ref
 
 
-def _finalize(pdf_bytes: bytes, signatures: list | None, dest_path: str) -> None:
+def _flatten_widgets(pdf) -> None:
+    """The REAL flatten: draw every widget's current appearance into the page
+    content (mapped ``/BBox`` → ``/Rect``; appearance ``/Matrix`` is not
+    handled — the appearances we generate carry none), then strip the widgets
+    and the AcroForm. After this, nothing is editable anywhere."""
+    import pikepdf
+    from pikepdf import Name, Stream
+
+    for page in pdf.pages:
+        annots = page.get(Name.Annots)
+        if annots is None:
+            continue
+        keep, ops = [], []
+        for annot in annots:
+            if annot.get(Name.Subtype) != Name.Widget:
+                keep.append(annot)
+                continue
+            ap = annot.get(Name.AP)
+            n = ap.get(Name.N) if ap is not None else None
+            stream = None
+            if isinstance(n, pikepdf.Stream):
+                stream = n
+            elif isinstance(n, pikepdf.Dictionary):
+                state = annot.get(Name.AS)
+                cand = n.get(state) if state is not None else None
+                if isinstance(cand, pikepdf.Stream):
+                    stream = cand
+            if stream is not None and Name.BBox in stream:
+                xs = [float(v) for v in annot[Name.Rect]]
+                x0, x1 = sorted((xs[0], xs[2]))
+                y0, y1 = sorted((xs[1], xs[3]))
+                bx0, by0, bx1, by1 = (float(v) for v in stream[Name.BBox])
+                bw, bh = bx1 - bx0, by1 - by0
+                if bw > 0 and bh > 0 and x1 > x0 and y1 > y0:
+                    sx, sy = (x1 - x0) / bw, (y1 - y0) / bh
+                    tx, ty = x0 - bx0 * sx, y0 - by0 * sy
+                    name = page.add_resource(stream, Name.XObject)
+                    ops.append(
+                        f"q {sx:.4f} 0 0 {sy:.4f} {tx:.3f} {ty:.3f} cm {name} Do Q"
+                    )
+            # the widget is dropped either way — value already lives in the look
+        if ops:
+            page.contents_add(Stream(pdf, " ".join(ops).encode("ascii")), prepend=False)
+        if keep:
+            page[Name.Annots] = pdf.make_indirect(pikepdf.Array(keep))
+        elif Name.Annots in page:
+            del page[Name.Annots]
+    if Name.AcroForm in pdf.Root:
+        del pdf.Root[Name.AcroForm]
+
+
+def _finalize(
+    pdf_bytes: bytes, signatures: list | None, dest_path: str, *, flatten: bool = False
+) -> None:
     """The pikepdf pass every save goes through: **sanitize** the output (strip
-    active content — see butterpdf.safety) and **stamp** any signatures as image
-    XObjects (soft-masked for transparency), then write."""
+    active content — see butterpdf.safety), **stamp** any signatures as image
+    XObjects (soft-masked for transparency), optionally **flatten** the form
+    (see :func:`_flatten_widgets`), then write."""
     import io
 
     import pikepdf
@@ -169,6 +226,8 @@ def _finalize(pdf_bytes: bytes, signatures: list | None, dest_path: str) -> None
             # image space is a unit square; this cm maps it to the target rect (pts)
             cs = f"q {x1 - x0:.3f} 0 0 {y1 - y0:.3f} {x0:.3f} {y0:.3f} cm {name} Do Q"
             page.contents_add(Stream(pdf, cs.encode("ascii")), prepend=False)
+        if flatten:
+            _flatten_widgets(pdf)
         pdf.save(dest_path)
     finally:
         pdf.close()
