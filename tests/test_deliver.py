@@ -180,3 +180,25 @@ def test_pypi_ownership_via_project_urls(monkeypatch):
     )
     c = Ctx(slug="butterpdf", repo="wolfgangwarehaus/butterPDF", display_name="butterPDF")
     assert c.pypi_state == "ours"
+
+
+def test_pypi_probes_use_the_distribution_name(monkeypatch):
+    """butterpdf publishes as butterpdf-base (the bare name is squatted): every PyPI
+    probe and guide must carry [project].name, never the slug."""
+    urls = []
+    monkeypatch.setattr(deliver, "_run", lambda cmd: None)
+    monkeypatch.setattr(deliver, "_gh_json", lambda args: None)
+    monkeypatch.setattr(
+        deliver, "_http_json", lambda url: urls.append(url) or deliver._NOT_FOUND
+    )
+    c = Ctx(slug="butterpdf", repo="wolfgangwarehaus/butterPDF", display_name="butterpdf",
+            dist="butterpdf-base")
+    assert c.pypi_state == "free"
+    assert any("pypi.org/pypi/butterpdf-base/json" in u for u in urls)
+    out = deliver.walkthrough(c, "pypi")
+    assert "PyPI project name:  butterpdf-base" in out
+
+
+def test_ctx_dist_defaults_to_slug():
+    c = Ctx(slug="butterpdf", repo="o/r", display_name="b")
+    assert c.dist == "butterpdf"
