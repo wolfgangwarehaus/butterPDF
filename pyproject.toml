@@ -56,6 +56,10 @@ dependencies = [
     "pikepdf>=8",
     # img2pdf losslessly embeds images into a PDF (the images→PDF converter).
     "img2pdf>=0.5",
+    # pypdf needs cryptography for AES-encrypted PDFs — including the common
+    # "permissions-restricted" file (owner password only, opens without a
+    # prompt). Without it, fields silently vanish and save raises.
+    "cryptography>=3.1",
 ]
 
 [project.optional-dependencies]

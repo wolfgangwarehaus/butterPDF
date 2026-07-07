@@ -1,5 +1,35 @@
 # butterPDF — TODO / handoff
 
+## ▶ Engine findings — AI stress-test 2026-07-07 (fix before or right after C3)
+
+An adversarial stress pass (real APIs, outputs verified with pypdf+pikepdf+QtPdf+
+poppler; repros in the session scratchpad `pdf-stress/`) found 3 open engine bugs.
+Fixed same day: AES owner-password-only PDFs (the common "permissions-restricted"
+file) used to silently lose the form and raise on save — `cryptography>=3.1` is
+now a declared dependency and the case works end-to-end.
+
+- **S1 (HIGH, data loss): hierarchical field values silently dropped on save** —
+  a parent field carrying `/FT` with named widget kids (`/T person` + kid
+  `/T first`, a common Acrobat shape): `read_fields` names it `person.first`,
+  but pypdf matches such widgets by the PARENT's qualified name, so
+  `save_filled` writes nothing — no /V, no error. Fill by `person` works
+  (key-mismatch proven). Fix in the read/save key mapping.
+- **S2 (HIGH): rotated pages (`/Rotate 90`) — signatures baked in the wrong
+  place, field overlays misplaced on screen** — `pt_to_px`/`px_to_pt` use the
+  rotation-applied `pagePointSize` with no rotation transform, while
+  `_finalize` stamps in unrotated user space. A signature dropped at one corner
+  renders at another, mostly off-page. Apply the `/Rotate` transform in the
+  coordinate mapping + when baking.
+- **S3 (MEDIUM): CJK/emoji fill values bake as literal `?` glyphs** in the
+  regenerated appearance (WinAnsi/Helvetica); `/V` is correct but flatten makes
+  the `?`s permanent. Embed a Unicode-capable font or warn instead of baking.
+  (Umlauts, long strings, delimiter chars all round-trip fine.)
+
+Everything else passed: radio groups, combo/list boxes, multi-page forms,
+non-`/Yes` checkbox on-states, damaged-file handling (no hangs, atomic-tmp
+clean), safety flagging (JS/AA/XFA/EmbeddedFiles + sanitize), signature edge
+placement.
+
 ## ▶ Resume here (after 2026-07-03 evening)
 
 The walkthrough refinements are LANDED (smooth ink — August-approved, baked ✕,
