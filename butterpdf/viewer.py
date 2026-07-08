@@ -280,7 +280,7 @@ class PdfViewer(QWidget):
         menu.addAction("Insert text here…").triggered.connect(
             lambda: self._insert_text_at(page_index, x_pt, y_pt))
         menu.addAction("Insert today's date here").triggered.connect(
-            lambda: self._stamp_text(self._today(), page_index, x_pt, y_pt))
+            lambda: self._insert_text_at(page_index, x_pt, y_pt, self._today()))
         menu.addAction("Sign document here…").triggered.connect(
             lambda: self.begin_sign(page_index=page_index, near_pt=spot))
         menu.exec(gpos)
@@ -291,55 +291,23 @@ class PdfViewer(QWidget):
 
         return date.today().isoformat()
 
-    def _insert_text_at(self, page_index: int, x_pt: float, y_pt: float) -> None:
-        """A small frosted prompt → stamp the text at the clicked spot."""
-        from PySide6.QtWidgets import QDialog, QHBoxLayout, QLineEdit, QPushButton
+    def _insert_text_at(self, page_index: int, x_pt: float, y_pt: float,
+                        text: str = "") -> None:
+        """Drop an in-place text box at the clicked spot — born focused, typed
+        into directly on the page (no dialog). It rides the signature overlay
+        protocol, so it drags/deletes/zooms and composites on save; an empty
+        box removes itself on focus-out."""
+        from butterpdf.text_overlay import TextStampOverlay
 
-        from butterpdf.frosted_dialog import FrostedDialog
-
-        dlg = FrostedDialog(self.window(), title="Insert text")
-        edit = QLineEdit()
-        edit.setPlaceholderText("Text to place on the page")
-        dlg.content_layout.addWidget(edit)
-        row = QHBoxLayout()
-        row.addStretch(1)
-        cancel = QPushButton("Cancel")
-        cancel.clicked.connect(dlg.reject)
-        place = QPushButton("Place")
-        place.setDefault(True)
-        place.clicked.connect(dlg.accept)
-        edit.returnPressed.connect(dlg.accept)
-        row.addWidget(cancel)
-        row.addWidget(place)
-        dlg.content_layout.addLayout(row)
-        edit.setFocus()
-        if dlg.exec() == QDialog.DialogCode.Accepted and edit.text().strip():
-            self._stamp_text(edit.text().strip(), page_index, x_pt, y_pt)
-
-    def _stamp_text(self, text: str, page_index: int, x_pt: float, y_pt: float) -> None:
-        """Render ``text`` to a transparent image and place it as a movable
-        overlay — the same machinery as signatures, so it drags/resizes/deletes
-        identically and composites through the same save path."""
-        from PySide6.QtGui import QColor, QFontDatabase
-
-        from butterpdf import signature as sig
-
-        family = QFontDatabase.systemFont(QFontDatabase.SystemFont.GeneralFont).family()
-        img = sig.render_typed(text, font_family=family, color=QColor(17, 17, 17))
-        if img.isNull() or not img.width():
-            return
         page = self._view.page_widget(page_index)
         if page is None:
             return
-        pw, ph = page.page_size_pt()
-        height_pt = 14.0  # a natural handwriting-on-a-form line height
-        width_pt = height_pt * img.width() / img.height()
-        if width_pt > pw * 0.9:  # very long text: clamp on-page, keep aspect
-            width_pt = pw * 0.9
-            height_pt = width_pt * img.height() / img.width()
-        x0 = min(max(0.0, x_pt), max(0.0, pw - width_pt))
-        y0 = min(max(0.0, y_pt), max(0.0, ph - height_pt))
-        self._place_stamp(img, page_index, (x0, y0, x0 + width_pt, y0 + height_pt))
+        overlay = TextStampOverlay(page, x_pt, y_pt, text)
+        page.add_overlay(overlay)
+        self._signatures = getattr(self, "_signatures", [])
+        self._signatures.append((page_index, overlay))
+        overlay.show()
+        overlay.start_editing()
 
     def place_signature(self, image, page_index: int | None = None,
                         near_pt: tuple | None = None) -> None:
@@ -382,7 +350,10 @@ class PdfViewer(QWidget):
         out = []
         for idx, ov in getattr(self, "_signatures", []):
             try:
-                out.append((idx, ov.rect_pt, ov.image))
+                img = ov.image
+                if img.isNull():
+                    continue  # e.g. a text box with nothing typed yet
+                out.append((idx, ov.rect_pt, img))
             except RuntimeError:
                 continue  # deleted overlay
         return out

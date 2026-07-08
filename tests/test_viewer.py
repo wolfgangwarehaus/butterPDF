@@ -68,38 +68,64 @@ def _write(tmp_path: Path, data: bytes) -> Path:
 # ── the page context menu + text stamps (2026-07-08 walkthrough asks) ─────────
 
 
-def test_stamp_text_places_a_tracked_overlay_at_the_spot(qapp, tmp_path: Path) -> None:
-    """'Insert text here' renders the text and drops it as a movable overlay
-    through the SAME tracking as signatures — so it composites on save."""
+def test_insert_text_box_types_in_place_and_composites(qapp, tmp_path: Path) -> None:
+    """'Insert text here' drops an IN-PLACE text box (no dialog): typing into
+    it renders through the same save tracking as signatures."""
     pdf = tmp_path / "good.pdf"
     pdf.write_bytes(_minimal_pdf())
     viewer = PdfViewer()
     viewer.open_path(pdf)
     qapp.processEvents()
 
-    viewer._stamp_text("2026-07-08", 0, 60.0, 120.0)
-    sigs = viewer._collect_signatures()
-    assert len(sigs) == 1
-    idx, rect_pt, img = sigs[0]
+    viewer._insert_text_at(0, 60.0, 120.0)
+    (page_index, overlay) = viewer._signatures[-1]
+    assert page_index == 0
+    assert viewer._collect_signatures() == []  # nothing typed → nothing baked
+
+    overlay._edit.setText("2026-07-08")
+    ((idx, rect_pt, img),) = viewer._collect_signatures()
     assert idx == 0
     x0, y0, x1, y1 = rect_pt
     assert (x0, y0) == (60.0, 120.0)  # anchored at the clicked spot
     assert abs((y1 - y0) - 14.0) < 0.01  # form-line height
     assert not img.isNull()
+    # the composite rect matches the RENDER's aspect (no chrome stretch)
+    assert abs((x1 - x0) / (y1 - y0) - img.width() / img.height()) < 0.01
 
 
-def test_stamp_text_clamps_long_text_on_page(qapp, tmp_path: Path) -> None:
+def test_prefilled_date_box_stays_editable(qapp, tmp_path: Path) -> None:
+    """'Insert today's date here' is just a prefilled text box."""
+    from datetime import date
+
     pdf = tmp_path / "good.pdf"
     pdf.write_bytes(_minimal_pdf())
     viewer = PdfViewer()
     viewer.open_path(pdf)
     qapp.processEvents()
 
-    viewer._stamp_text("a very long line of text " * 8, 0, 290.0, 295.0)
-    ((_, rect_pt, _),) = viewer._collect_signatures()
-    x0, y0, x1, y1 = rect_pt
-    pw, ph = viewer._view.page_widget(0).page_size_pt()
-    assert 0 <= x0 and x1 <= pw and 0 <= y0 and y1 <= ph
+    viewer._insert_text_at(0, 40.0, 40.0, viewer._today())
+    (_, overlay) = viewer._signatures[-1]
+    assert overlay._edit.text() == date.today().isoformat()
+    ((_, _, img),) = viewer._collect_signatures()
+    assert not img.isNull()
+
+
+def test_empty_text_box_removes_itself_on_focus_out(qapp, tmp_path: Path) -> None:
+    pdf = tmp_path / "good.pdf"
+    pdf.write_bytes(_minimal_pdf())
+    viewer = PdfViewer()
+    viewer.open_path(pdf)
+    qapp.processEvents()
+
+    viewer._insert_text_at(0, 60.0, 120.0)
+    (_, overlay) = viewer._signatures[-1]
+    page = viewer._view.page_widget(0)
+    assert overlay in page._overlays
+    from PySide6.QtCore import QEvent
+
+    overlay.eventFilter(overlay._edit, QEvent(QEvent.Type.FocusOut))
+    assert overlay not in page._overlays  # cleaned itself up
+    assert viewer._collect_signatures() == []
 
 
 def test_page_right_click_reaches_the_viewer_handler(qapp, tmp_path: Path) -> None:
@@ -119,3 +145,33 @@ def test_page_right_click_reaches_the_viewer_handler(qapp, tmp_path: Path) -> No
     ((idx, gx, gy, gpos),) = got
     assert idx == 0 and gpos is None
     assert (gx, gy) == (x_pt, y_pt)
+
+
+def test_parked_text_box_click_reenters_editing(qapp, tmp_path: Path) -> None:
+    """Press+release without movement on a parked box = back into the text;
+    only an actual drag moves it."""
+    from PySide6.QtCore import QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+
+    pdf = tmp_path / "good.pdf"
+    pdf.write_bytes(_minimal_pdf())
+    viewer = PdfViewer()
+    viewer.open_path(pdf)
+    qapp.processEvents()
+
+    viewer._insert_text_at(0, 60.0, 120.0, "hello")
+    (_, overlay) = viewer._signatures[-1]
+    entered = []
+    overlay.start_editing = lambda: entered.append(True)
+
+    center = QPointF(overlay.width() / 2, overlay.height() / 2)
+    gpos = QPointF(overlay.mapToGlobal(center.toPoint()))
+    press = QMouseEvent(QMouseEvent.Type.MouseButtonPress, center, gpos,
+                        Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton,
+                        Qt.KeyboardModifier.NoModifier)
+    release = QMouseEvent(QMouseEvent.Type.MouseButtonRelease, center, gpos,
+                          Qt.MouseButton.LeftButton, Qt.MouseButton.NoButton,
+                          Qt.KeyboardModifier.NoModifier)
+    overlay.mousePressEvent(press)
+    overlay.mouseReleaseEvent(release)
+    assert entered == [True]
