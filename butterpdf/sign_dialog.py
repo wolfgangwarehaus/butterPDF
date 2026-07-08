@@ -348,14 +348,12 @@ class SignatureDialog(FrostedDialog):
 
     # ── draw controls ─────────────────────────────────────────────────────
     def _colour_swatch(self, hex_: str) -> QPushButton:
-        b = QPushButton()
-        b.setFixedSize(22, 22)
-        b.setCursor(Qt.CursorShape.PointingHandCursor)
-        b.setToolTip(hex_)
-        b.setStyleSheet(
-            f"QPushButton{{background:{hex_};border:1px solid rgba(0,0,0,0.35);"
-            f"border-radius:11px;}}QPushButton:hover{{border:2px solid {ui_helpers.ACCENT};}}"
+        # painted circle, not a QSS one — QSS circular borders leave AA dot
+        # artifacts at the quadrant seams (the base's CircleSwatch rationale)
+        b = ui_helpers.CircleSwatch(
+            hex_, diameter=22, ring="#59000000", hover_ring=ui_helpers.ACCENT
         )
+        b.setToolTip(hex_)
         b.clicked.connect(lambda _=False, h=hex_: self._canvas.set_ink(QColor(h)))
         return b
 

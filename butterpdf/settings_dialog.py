@@ -11,7 +11,7 @@ Selector + live-theme pattern an app builds on.
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QLabel, QPushButton
+from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QLabel
 
 from butterpdf import ui_helpers
 from butterpdf.bus import AppBus
@@ -147,11 +147,8 @@ class SettingsDialog(FrostedDialog):
         row.setSpacing(10)
         self._swatches = []
         for name, hex_ in ACCENT_PRESETS:
-            sw = QPushButton()
+            sw = ui_helpers.CircleSwatch(hex_, diameter=28, hover_ring="#99ffffff")
             sw.setToolTip(name)
-            sw.setFixedSize(28, 28)
-            sw.setCursor(self.cursor())
-            sw.setStyleSheet(self._swatch_qss(hex_, selected=False))
             sw.clicked.connect(lambda _=False, h=hex_: self._on_accent(h))
             self._swatches.append((sw, hex_))
             row.addWidget(sw)
@@ -159,22 +156,13 @@ class SettingsDialog(FrostedDialog):
         self._mark_selected_swatch(self.s.accent_color)
         return row
 
-    @staticmethod
-    def _swatch_qss(hex_: str, selected: bool) -> str:
-        ring = "#ffffff" if selected else "transparent"
-        # NOTE: the border MUST carry its `border:` property — a bare
-        # "2px solid …" is an invalid declaration that makes Qt discard the whole
-        # rule (background included → empty black swatches).
-        return (
-            f"QPushButton{{background:{hex_};border-radius:14px;"
-            f"border:2px solid {ring};}}"
-            f"QPushButton:hover{{border:2px solid rgba(255,255,255,0.6);}}"
-        )
-
     def _mark_selected_swatch(self, current_hex: str) -> None:
+        # CircleSwatch paints the circle + ring with QPainter — QSS circles
+        # (border-radius = half size) stroke four arcs whose quadrant seams
+        # leave dot artifacts along the path (ported from dough, 2026-07-08).
         cur = (current_hex or "").strip().lower()
         for sw, hex_ in self._swatches:
-            sw.setStyleSheet(self._swatch_qss(hex_, selected=hex_.lower() == cur))
+            sw.set_ring("#ffffff" if hex_.lower() == cur else None)
 
     @staticmethod
     def _select(sel: Selector, value: str) -> None:
