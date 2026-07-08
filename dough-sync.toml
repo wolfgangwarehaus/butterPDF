@@ -4,7 +4,7 @@
 # The dough commit this loaf was last reconciled against. butterPDF was scaffolded
 # from dough at 8d9610e (the `dough new` commit), before the first-looks backport
 # it drove. `--record` stamps this to dough HEAD after a sync.
-synced_from = "5450790"
+synced_from = "7f3d9da"
 
 # Files (relative to the butterpdf/ package dir) the fork OWNS — net-new app code or
 # modules it fully rewrote. Sync never reads or writes these.
