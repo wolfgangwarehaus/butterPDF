@@ -47,3 +47,41 @@ def test_restyle_switches_fill_live():
 def test_checkbox_created_dark_starts_grey():
     w = make_field_widget(_field("checkbox"), dark_page=True)
     assert "233,235,239" in w.styleSheet()
+
+
+# ── the frosted context menu (2026-07-08 walkthrough: Qt's default black
+# QLineEdit popup was the one un-themed surface; opaque_menu is the convention)
+
+
+@pytest.mark.usefixtures("qapp")
+def test_text_field_context_menu_is_frosted_with_form_actions():
+    w = make_field_widget(_field("text", value="hello"))
+    menu = w._build_context_menu()
+    labels = [a.text() for a in menu.actions() if a.text()]
+    for expected in ("Undo", "Redo", "Cut", "Copy", "Paste", "Select All",
+                     "Insert today's date"):
+        assert expected in labels
+    # unwired sign_here → no dangling action
+    assert not any("Sign document here" in t for t in labels)
+    # the opaque_menu treatment actually applied (never a raw QMenu)
+    assert menu.styleSheet()
+
+
+@pytest.mark.usefixtures("qapp")
+def test_sign_here_action_appears_when_wired_and_passes_the_field():
+    got = []
+    w = make_field_widget(_field("text"), sign_here=got.append)
+    menu = w._build_context_menu()
+    (sign,) = [a for a in menu.actions() if "Sign document here" in a.text()]
+    sign.trigger()
+    assert got == [w._field]
+
+
+@pytest.mark.usefixtures("qapp")
+def test_insert_today_inserts_an_iso_date_at_the_cursor():
+    from datetime import date
+
+    w = make_field_widget(_field("text", value="signed on "))
+    w.setCursorPosition(len(w.text()))
+    w._insert_today()
+    assert w.text() == f"signed on {date.today().isoformat()}"

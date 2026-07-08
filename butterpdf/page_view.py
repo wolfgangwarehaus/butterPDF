@@ -121,10 +121,20 @@ class PageWidget(QWidget):
         self._boxes_provider = None  # callable(index) -> [image boxes in points]
         self._fields: list[tuple] = []  # (widget, rect_pt) overlays anchored to the page
         self._overlays: list = []  # self-positioning movable overlays (signatures)
+        # Right-click on the bare page (not a child field/overlay) —
+        # fn(page_index, x_pt, y_pt, global_pos). The view wires it.
+        self.context_handler = None
         # Opaque only when the paper fully covers the widget (an opaque fill) — a
         # translucent/None paper must let the frost show through.
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
         self._apply_size()
+
+    def contextMenuEvent(self, e) -> None:  # noqa: N802 (Qt override)
+        if callable(self.context_handler):
+            x_pt, y_pt = self.px_to_pt(e.pos().x(), e.pos().y())
+            self.context_handler(self._index, x_pt, y_pt, e.globalPos())
+        else:
+            super().contextMenuEvent(e)
 
     # ── field overlays ──────────────────────────────────────────────────────
     def add_field(self, widget: QWidget, rect_pt: tuple) -> None:
@@ -305,6 +315,13 @@ class RenderedPdfView(QScrollArea):
     def page_widget(self, index: int) -> PageWidget | None:
         return self._pages[index] if 0 <= index < len(self._pages) else None
 
+    def _dispatch_page_context(self, index: int, x_pt: float, y_pt: float, gpos) -> None:
+        """Relay a page's right-click to ``page_context_handler`` (read at call
+        time, so the owner can wire it before or after pages are built)."""
+        handler = getattr(self, "page_context_handler", None)
+        if callable(handler):
+            handler(index, x_pt, y_pt, gpos)
+
     def jump_to_page(self, index: int) -> None:
         index = max(0, min(len(self._pages) - 1, index))
         if not self._pages:
@@ -354,6 +371,7 @@ class RenderedPdfView(QScrollArea):
         for i in range(self._doc.pageCount()):
             page = PageWidget(self._doc, i, self._canvas)
             page._boxes_provider = self._boxes_provider
+            page.context_handler = self._dispatch_page_context
             page.set_display(self._paper, self._recolor)
             self._vbox.addWidget(page, 0, Qt.AlignmentFlag.AlignHCenter)
             self._pages.append(page)

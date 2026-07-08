@@ -63,3 +63,59 @@ def _write(tmp_path: Path, data: bytes) -> Path:
     p = tmp_path / "doc.pdf"
     p.write_bytes(data)
     return p
+
+
+# ── the page context menu + text stamps (2026-07-08 walkthrough asks) ─────────
+
+
+def test_stamp_text_places_a_tracked_overlay_at_the_spot(qapp, tmp_path: Path) -> None:
+    """'Insert text here' renders the text and drops it as a movable overlay
+    through the SAME tracking as signatures — so it composites on save."""
+    pdf = tmp_path / "good.pdf"
+    pdf.write_bytes(_minimal_pdf())
+    viewer = PdfViewer()
+    viewer.open_path(pdf)
+    qapp.processEvents()
+
+    viewer._stamp_text("2026-07-08", 0, 60.0, 120.0)
+    sigs = viewer._collect_signatures()
+    assert len(sigs) == 1
+    idx, rect_pt, img = sigs[0]
+    assert idx == 0
+    x0, y0, x1, y1 = rect_pt
+    assert (x0, y0) == (60.0, 120.0)  # anchored at the clicked spot
+    assert abs((y1 - y0) - 14.0) < 0.01  # form-line height
+    assert not img.isNull()
+
+
+def test_stamp_text_clamps_long_text_on_page(qapp, tmp_path: Path) -> None:
+    pdf = tmp_path / "good.pdf"
+    pdf.write_bytes(_minimal_pdf())
+    viewer = PdfViewer()
+    viewer.open_path(pdf)
+    qapp.processEvents()
+
+    viewer._stamp_text("a very long line of text " * 8, 0, 290.0, 295.0)
+    ((_, rect_pt, _),) = viewer._collect_signatures()
+    x0, y0, x1, y1 = rect_pt
+    pw, ph = viewer._view.page_widget(0).page_size_pt()
+    assert 0 <= x0 and x1 <= pw and 0 <= y0 and y1 <= ph
+
+
+def test_page_right_click_reaches_the_viewer_handler(qapp, tmp_path: Path) -> None:
+    """PageWidget → RenderedPdfView dispatch → the viewer's handler, with the
+    click position already converted to page points."""
+    pdf = tmp_path / "good.pdf"
+    pdf.write_bytes(_minimal_pdf())
+    viewer = PdfViewer()
+    viewer.open_path(pdf)
+    qapp.processEvents()
+
+    got = []
+    viewer._view.page_context_handler = lambda *a: got.append(a)
+    page = viewer._view.page_widget(0)
+    x_pt, y_pt = page.px_to_pt(10.0, 10.0)
+    page.context_handler(page.index, x_pt, y_pt, None)
+    ((idx, gx, gy, gpos),) = got
+    assert idx == 0 and gpos is None
+    assert (gx, gy) == (x_pt, y_pt)

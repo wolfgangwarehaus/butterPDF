@@ -13,9 +13,61 @@ the save step, and ``.value_str()`` reads the current widget value uniformly.
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QGuiApplication, QKeySequence
 from PySide6.QtWidgets import QComboBox, QLineEdit, QPushButton, QWidget
 
 from butterpdf import ui_helpers
+
+
+class TextField(QLineEdit):
+    """A text input whose context menu is the app's frosted ``opaque_menu`` —
+    Qt's default QLineEdit popup is a raw un-themed QMenu (the one place the
+    stock chrome leaked through, caught in the 2026-07-08 walkthrough) — plus
+    the two form niceties: insert today's date, and sign the document here.
+    ``sign_here`` is wired by the viewer (``fn(field)``) when signing is
+    possible; unwired, the action simply doesn't appear."""
+
+    def __init__(self, field, dark_page: bool = False) -> None:
+        super().__init__(field.value)
+        self._field = field
+        self.sign_here = None  # viewer-wired: fn(field) → the sign-at flow
+
+    def _build_context_menu(self):
+        menu = ui_helpers.opaque_menu(self)
+
+        def act(text, slot, enabled=True, shortcut=None):
+            a = menu.addAction(text)
+            a.triggered.connect(slot)
+            a.setEnabled(enabled)
+            if shortcut:
+                a.setShortcut(QKeySequence(shortcut))
+            return a
+
+        has_sel = self.hasSelectedText()
+        act("Undo", self.undo, self.isUndoAvailable(), QKeySequence.StandardKey.Undo)
+        act("Redo", self.redo, self.isRedoAvailable(), QKeySequence.StandardKey.Redo)
+        menu.addSeparator()
+        act("Cut", self.cut, has_sel, QKeySequence.StandardKey.Cut)
+        act("Copy", self.copy, has_sel, QKeySequence.StandardKey.Copy)
+        act("Paste", self.paste,
+            bool(QGuiApplication.clipboard().text()), QKeySequence.StandardKey.Paste)
+        act("Select All", self.selectAll, bool(self.text()),
+            QKeySequence.StandardKey.SelectAll)
+        menu.addSeparator()
+        act("Insert today's date", self._insert_today)
+        if callable(self.sign_here):
+            act("Sign document here…", lambda: self.sign_here(self._field))
+        return menu
+
+    def _insert_today(self) -> None:
+        """ISO date (2026-07-08) at the cursor — unambiguous on any form,
+        replaces a selection like normal typed input."""
+        from datetime import date
+
+        self.insert(date.today().isoformat())
+
+    def contextMenuEvent(self, e) -> None:  # noqa: N802 (Qt override)
+        self._build_context_menu().exec(e.globalPos())
 
 
 class CheckField(QPushButton):
@@ -94,11 +146,14 @@ def restyle_field_widget(w: QWidget, dark_page: bool) -> None:
         w.setStyleSheet(_check_qss(dark_page))
 
 
-def make_field_widget(field, dark_page: bool = False) -> QWidget | None:
+def make_field_widget(field, dark_page: bool = False, sign_here=None) -> QWidget | None:
     """An editable widget for ``field`` (or None for a kind we don't fill yet).
-    Carries ``._field``; read the current value with :func:`field_value`."""
+    Carries ``._field``; read the current value with :func:`field_value`.
+    ``sign_here`` (``fn(field)``) enables the text fields' context-menu
+    "Sign document here…" action."""
     if field.kind == "text":
-        w: QWidget = QLineEdit(field.value)
+        w: QWidget = TextField(field, dark_page)
+        w.sign_here = sign_here
         w.setStyleSheet(_text_qss(dark_page))
     elif field.kind in ("checkbox", "radio"):
         w = CheckField(field, dark_page)

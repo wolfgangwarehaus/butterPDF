@@ -80,6 +80,7 @@ class PdfViewer(QWidget):
         # gutters, and 10px page spacing live in RenderedPdfView.
         self._doc = QPdfDocument(self)
         self._view = RenderedPdfView(self)  # installs its own slim auto-fade scrollbar
+        self._view.page_context_handler = self._page_context_menu
         self._view.set_document(self._doc)
 
         self._empty = self._make_empty_state()
@@ -157,7 +158,7 @@ class PdfViewer(QWidget):
             page = self._view.page_widget(fld.page_index)
             if page is None:
                 continue
-            widget = make_field_widget(fld, self._page_is_dark())
+            widget = make_field_widget(fld, self._page_is_dark(), sign_here=self._sign_here)
             if widget is None:
                 continue
             page.add_field(widget, fld.rect)
@@ -244,8 +245,10 @@ class PdfViewer(QWidget):
     def can_edit(self) -> bool:
         return self._doc.status() == QPdfDocument.Status.Ready and self._doc.pageCount() > 0
 
-    def begin_sign(self) -> None:
-        """Create a signature (dialog) and drop it on the current page to place."""
+    def begin_sign(self, page_index: int | None = None, near_pt: tuple | None = None) -> None:
+        """Create a signature (dialog) and drop it on the current page to place.
+        ``page_index`` + ``near_pt`` (an (x0,y0,x1,y1) rect in page points)
+        target a specific spot — the fields' "Sign document here…" path."""
         if not self.can_edit():
             return
         from PySide6.QtWidgets import QDialog
@@ -256,14 +259,95 @@ class PdfViewer(QWidget):
         if dlg.exec() == QDialog.DialogCode.Accepted:
             img = dlg.signature_image()
             if img is not None and not img.isNull():
-                self.place_signature(img)
+                self.place_signature(img, page_index=page_index, near_pt=near_pt)
 
-    def place_signature(self, image) -> None:
-        """Drop ``image`` onto the current page at a comfortable default size, ready
-        to drag/resize. Tracked for compositing on save."""
-        from butterpdf.sign_overlay import SignatureOverlay
+    def _sign_here(self, field) -> None:
+        """A text field's context-menu "Sign document here…" — the sign dialog,
+        landing the result at the field instead of the default spot."""
+        self.begin_sign(page_index=field.page_index, near_pt=field.rect)
 
-        idx = self._view.current_page()
+    # ── the page context menu (right-click on bare page, not a field) ────────
+    def _page_context_menu(self, page_index: int, x_pt: float, y_pt: float, gpos) -> None:
+        """Frosted menu for a click anywhere on the page itself — text and
+        signatures aren't gated on the PDF having AcroForm fields, so this is
+        how a NON-interactive (paper-scan-style) form gets filled."""
+        if not self.can_edit():
+            return
+        from butterpdf import ui_helpers
+
+        menu = ui_helpers.opaque_menu(self)
+        spot = (x_pt, y_pt, x_pt, y_pt)
+        menu.addAction("Insert text here…").triggered.connect(
+            lambda: self._insert_text_at(page_index, x_pt, y_pt))
+        menu.addAction("Insert today's date here").triggered.connect(
+            lambda: self._stamp_text(self._today(), page_index, x_pt, y_pt))
+        menu.addAction("Sign document here…").triggered.connect(
+            lambda: self.begin_sign(page_index=page_index, near_pt=spot))
+        menu.exec(gpos)
+
+    @staticmethod
+    def _today() -> str:
+        from datetime import date
+
+        return date.today().isoformat()
+
+    def _insert_text_at(self, page_index: int, x_pt: float, y_pt: float) -> None:
+        """A small frosted prompt → stamp the text at the clicked spot."""
+        from PySide6.QtWidgets import QDialog, QHBoxLayout, QLineEdit, QPushButton
+
+        from butterpdf.frosted_dialog import FrostedDialog
+
+        dlg = FrostedDialog(self.window(), title="Insert text")
+        edit = QLineEdit()
+        edit.setPlaceholderText("Text to place on the page")
+        dlg.content_layout.addWidget(edit)
+        row = QHBoxLayout()
+        row.addStretch(1)
+        cancel = QPushButton("Cancel")
+        cancel.clicked.connect(dlg.reject)
+        place = QPushButton("Place")
+        place.setDefault(True)
+        place.clicked.connect(dlg.accept)
+        edit.returnPressed.connect(dlg.accept)
+        row.addWidget(cancel)
+        row.addWidget(place)
+        dlg.content_layout.addLayout(row)
+        edit.setFocus()
+        if dlg.exec() == QDialog.DialogCode.Accepted and edit.text().strip():
+            self._stamp_text(edit.text().strip(), page_index, x_pt, y_pt)
+
+    def _stamp_text(self, text: str, page_index: int, x_pt: float, y_pt: float) -> None:
+        """Render ``text`` to a transparent image and place it as a movable
+        overlay — the same machinery as signatures, so it drags/resizes/deletes
+        identically and composites through the same save path."""
+        from PySide6.QtGui import QColor, QFontDatabase
+
+        from butterpdf import signature as sig
+
+        family = QFontDatabase.systemFont(QFontDatabase.SystemFont.GeneralFont).family()
+        img = sig.render_typed(text, font_family=family, color=QColor(17, 17, 17))
+        if img.isNull() or not img.width():
+            return
+        page = self._view.page_widget(page_index)
+        if page is None:
+            return
+        pw, ph = page.page_size_pt()
+        height_pt = 14.0  # a natural handwriting-on-a-form line height
+        width_pt = height_pt * img.width() / img.height()
+        if width_pt > pw * 0.9:  # very long text: clamp on-page, keep aspect
+            width_pt = pw * 0.9
+            height_pt = width_pt * img.height() / img.width()
+        x0 = min(max(0.0, x_pt), max(0.0, pw - width_pt))
+        y0 = min(max(0.0, y_pt), max(0.0, ph - height_pt))
+        self._place_stamp(img, page_index, (x0, y0, x0 + width_pt, y0 + height_pt))
+
+    def place_signature(self, image, page_index: int | None = None,
+                        near_pt: tuple | None = None) -> None:
+        """Drop ``image`` onto a page at a comfortable default size, ready to
+        drag/resize. Anchored at ``near_pt``'s lower-left when given (clamped
+        on-page), else the natural lower-left-ish sign spot on the current
+        page. Tracked for compositing on save."""
+        idx = self._view.current_page() if page_index is None else page_index
         page = self._view.page_widget(idx)
         if page is None:
             return
@@ -271,12 +355,26 @@ class PdfViewer(QWidget):
         width_pt = min(220.0, pw * 0.42)
         aspect = image.height() / image.width() if image.width() else 0.4
         height_pt = width_pt * aspect
-        x0, y0 = pw * 0.10, ph * 0.12  # lower-left-ish, a natural sign spot
-        rect_pt = (x0, y0, x0 + width_pt, y0 + height_pt)
+        if near_pt is not None:
+            # bottom-left of the target rect, clamped so the signature stays on-page
+            x0 = min(max(0.0, near_pt[0]), max(0.0, pw - width_pt))
+            y0 = min(max(0.0, near_pt[1]), max(0.0, ph - height_pt))
+        else:
+            x0, y0 = pw * 0.10, ph * 0.12  # lower-left-ish, a natural sign spot
+        self._place_stamp(image, idx, (x0, y0, x0 + width_pt, y0 + height_pt))
+
+    def _place_stamp(self, image, page_index: int, rect_pt: tuple) -> None:
+        """The shared drop: a movable/resizable overlay, tracked for
+        compositing on save (signatures AND inserted text)."""
+        from butterpdf.sign_overlay import SignatureOverlay
+
+        page = self._view.page_widget(page_index)
+        if page is None:
+            return
         overlay = SignatureOverlay(page, image, rect_pt)
         page.add_overlay(overlay)
         self._signatures = getattr(self, "_signatures", [])
-        self._signatures.append((idx, overlay))
+        self._signatures.append((page_index, overlay))
 
     def _collect_signatures(self) -> list:
         """(page_index, rect_pt points, QImage) for each placed signature still
