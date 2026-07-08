@@ -30,15 +30,18 @@ non-`/Yes` checkbox on-states, damaged-file handling (no hangs, atomic-tmp
 clean), safety flagging (JS/AA/XFA/EmbeddedFiles + sanitize), signature edge
 placement.
 
-## ▶ Resume here (after 2026-07-03 evening)
+## ▶ Resume here (after 2026-07-07)
 
-The walkthrough refinements are LANDED (smooth ink — August-approved, baked ✕,
-light-grey fills on dark pages, the CLI front, the editable install; 172 tests,
-3-OS CI green). **Next: (1) the walkthrough's in-person tail — open
-`walk_flattened_v2.pdf` in Okular/Firefox (✕ visible, name baked, nothing
-editable) + drag/zoom/scroll feel verdicts; (2) C3 ship — `butterpdf-deliver`
-walks it (PyPI name `butterpdf` is FREE; needs the C2 call on dough's taken
-PyPI name + the first tag).**
+New machine (fresh CachyOS) fully set up; 180 tests, 3-OS CI green @ `c5f2575`;
+`cryptography` is now a declared dep (see the stress findings above). The
+walkthrough artifacts were regenerated on this machine (`/tmp/butterpdf_sample_form.pdf`,
+`/tmp/walk_filled_v2.pdf`, `/tmp/walk_flattened_v2.pdf`). **Next: (1) pull dough's
+rig/deliver fixes — `python ../dough/dev/sync_loaf.py --loaf . --apply` → test →
+commit → `--record`; (2) fix S1 + S2 above (HIGH — S1 is silent data loss);
+(3) the walkthrough's in-person tail — open `/tmp/walk_flattened_v2.pdf` in
+Okular/Firefox (✕ visible, name baked, nothing editable) + drag/zoom/scroll feel
+verdicts; (4) C3 ship — `butterpdf-deliver` walks it (PyPI name `butterpdf` is
+FREE; dough publishes as `dough-base`, decided; needs dough's first tag).**
 
 ## ▶ Audit 2026-07-03 — CI was quietly red; fixed
 
