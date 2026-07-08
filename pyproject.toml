@@ -80,6 +80,9 @@ butterpdf-new = "butterpdf.scaffold:main"
 # The Delivery-phase walkthroughs: the channel board, per-channel activation,
 # and the update lap (dough docs/DELIVERY.md).
 butterpdf-deliver = "butterpdf.deliver:main"
+# The live maker surface: goals + phase checklists, shared with the AI agent
+# via dough-board.toml.
+butterpdf-board = "butterpdf.board:main"
 
 [project.urls]
 Homepage = "https://github.com/wolfgangwarehaus/butterpdf"
