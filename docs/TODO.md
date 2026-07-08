@@ -30,6 +30,19 @@ non-`/Yes` checkbox on-states, damaged-file handling (no hangs, atomic-tmp
 clean), safety flagging (JS/AA/XFA/EmbeddedFiles + sanitize), signature edge
 placement.
 
+## ▶ Resume here (after 2026-07-08 — the walkthrough day)
+
+August's guided pass landed a feature round: frosted field + page context
+menus (date insert, sign-here), IN-PLACE text boxes (non-interactive PDFs are
+now fillable), the venv blur fix (real KWin blur — the grain was the fallback),
+CircleSwatch (no more dots on circle swatches), and the breadboard (see
+`butterpdf-breadboard`; `../dough/docs/TODO.md` §Wind-down 2026-07-08 for the
+day's full record). R5's cross-viewer check PASSED (Okular/Firefox). 192
+tests, 3-OS CI green @ `bfb3898`. **Still open before the tag: the last feel
+verdicts (drag/zoom/scroll, dark backgrounds, wide-signature resolution),
+then S1+S2 (HIGH), then C3.** The breadboard's Delivery tab shows the live
+channel state.
+
 ## ▶ Resume here (after 2026-07-07)
 
 New machine (fresh CachyOS) fully set up; 180 tests, 3-OS CI green @ `c5f2575`;
