@@ -195,7 +195,9 @@ def run_app(content_factory, *, identity=None, single_instance=True) -> int:
       * **persisted theme** — accent / colour overrides load BEFORE the first
         widget so every surface stamps from the saved palette;
       * **the settings dialog** — wired to ``AppBus.show_settings``;
-      * **window geometry** — restored on launch, saved on quit.
+      * **window geometry** — restored on launch, saved on quit;
+      * **translations** — ``butterpdf.i18n`` installs the catalog for the user's
+        language (Settings override → system locale) before any widget exists.
 
     ``identity`` (optional) is a mapping forwarded to :func:`butterpdf.configure`
     (``org`` / ``app`` / ``display_name``). NOTE: for the import-time font scale
@@ -243,6 +245,13 @@ def run_app(content_factory, *, identity=None, single_instance=True) -> int:
     # noborder rule + drag_repaint effect match the slug as a SUBSTRING, so
     # both survive the app_id change.
     app.setDesktopFileName(ident.desktop_id())
+
+    # Install translation catalogs (Settings override → system locale) before
+    # ANY widget is built — Qt translates at construction time. Never raises;
+    # a missing catalog just leaves the English source strings.
+    from butterpdf import i18n as _i18n
+
+    _i18n.install(app)
 
     # Single instance: hand off to the already-running copy rather than opening
     # a second window. Keep the lock object alive for the process lifetime.
@@ -335,6 +344,18 @@ def run_app(content_factory, *, identity=None, single_instance=True) -> int:
         noborder.remove_main_window_noborder()
     else:
         noborder.install_main_window_noborder()
+
+    # Follow the desktop accent colour if the user enabled it: apply it now
+    # (launch re-read) and watch the OS for live changes (XDG portal / DWM
+    # message / AppKit notification). Best-effort — a DE without the portal
+    # simply never fires. Pinned on `win` so the watcher lives with the window.
+    try:
+        from butterpdf.system_accent import SystemAccentFollower
+
+        win._accent_follower = SystemAccentFollower(win)
+        win._accent_follower.start()
+    except Exception:
+        pass
 
     win.show()
 

@@ -192,6 +192,9 @@ exclude = ["tests*", "docs*", "packaging*"]
     "effect/dragrepaint/metadata.json",
     "effect/dragrepaint/contents/code/main.js",
 ]
+# Compiled translation catalogs (butterpdf/i18n/butterpdf_<code>.qm) ship as
+# package data so butterpdf.i18n.install resolves them via importlib.resources.
+"butterpdf.i18n" = ["*.qm"]
 
 [tool.pytest.ini_options]
 # GUI tests run headless — conftest.py forces QT_QPA_PLATFORM=offscreen before

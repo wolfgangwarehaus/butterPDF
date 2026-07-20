@@ -74,6 +74,13 @@ class SettingsDialog(FrostedDialog):
         self.content_layout.addWidget(self._label("ACCENT COLOR"))
         self.content_layout.addLayout(self._accent_row())
 
+        # Follow the OS accent — applies now + tracks live changes (see
+        # butterpdf.system_accent). Picking a swatch above turns it back off.
+        self.follow_accent_check = QCheckBox("Follow system accent color")
+        self.follow_accent_check.setChecked(self.s.follow_system_accent)
+        self.follow_accent_check.toggled.connect(self._on_follow_accent)
+        self.content_layout.addWidget(self.follow_accent_check)
+
         self.content_layout.addWidget(self._label("FONT SIZE"))
         self.font_sel = Selector()
         for lbl, val in _FONT_SIZES:
@@ -116,6 +123,26 @@ class SettingsDialog(FrostedDialog):
         self.corners_check.setChecked(self.s.square_corners)
         self.corners_check.toggled.connect(self._on_square_corners)
         self.content_layout.addWidget(self.corners_check)
+
+        # Language — the UI language override. "System default" ('') follows
+        # the OS locale; explicit picks are bare codes ("es"). Translators
+        # install in run_app() before any widget exists, so this is restart-
+        # required like Square corners. Options come from i18n.SHIPPED_LANGUAGES
+        # so adding a catalog auto-extends the menu; the row is hidden entirely
+        # while no catalog ships — a picker with only English in it is noise.
+        from butterpdf.i18n import SHIPPED_LANGUAGES
+
+        if SHIPPED_LANGUAGES:
+            self.content_layout.addWidget(self._label("LANGUAGE"))
+            self.language_sel = Selector()
+            self.language_sel.addItem(self.tr("System default"), "")
+            self.language_sel.addItem("English", "en")
+            for _code, _en_name, _native in SHIPPED_LANGUAGES:
+                self.language_sel.addItem(_native, _code)
+            self._select(self.language_sel, self.s.language)
+            self.language_sel.setFixedWidth(256)
+            self.language_sel.currentIndexChanged.connect(self._on_language)
+            self.content_layout.addWidget(self.language_sel)
 
         # Launch on login — only offered when a platform backend can actually
         # fulfil it (XDG autostart / Run key / StartupTask / LaunchAgent). The
@@ -180,9 +207,26 @@ class SettingsDialog(FrostedDialog):
 
     def _on_accent(self, hex_: str) -> None:
         self.s.accent_color = hex_
+        # An explicit pick overrides the OS-follow — reflect that in the toggle
+        # (blockSignals so the un-check doesn't fire _on_follow_accent).
+        if self.s.follow_system_accent:
+            self.s.follow_system_accent = False
+            self.follow_accent_check.blockSignals(True)
+            self.follow_accent_check.setChecked(False)
+            self.follow_accent_check.blockSignals(False)
         self._mark_selected_swatch(hex_)
         self._apply_live()
         AppBus.get().accent_changed.emit(hex_)
+
+    def _on_follow_accent(self, on: bool) -> None:
+        self.s.follow_system_accent = bool(on)
+        if on:
+            # The live watcher only fires on OS-side changes — sync now so the
+            # toggle takes effect immediately (async off the GUI thread where
+            # the read blocks; the swatch ring updates via theme_changed).
+            from butterpdf.system_accent import resync_system_accent
+
+            resync_system_accent()
 
     def _on_font_size(self, _idx: int) -> None:
         self.s.font_scale = self.font_sel.currentData()
@@ -203,6 +247,12 @@ class SettingsDialog(FrostedDialog):
         set_square_corners(bool(on))
         self._apply_live()
         self._restart_note.setText("Square corners fully applies after a restart.")
+
+    def _on_language(self, _idx: int) -> None:
+        # Persist the pick; translators only install at boot (run_app calls
+        # i18n.install before any widget exists), so show the restart notice.
+        self.s.language = self.language_sel.currentData() or ""
+        self._restart_note.setText("Language applies after a restart.")
 
     def _on_autostart(self, on: bool) -> None:
         from butterpdf import autostart
