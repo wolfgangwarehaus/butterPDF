@@ -442,6 +442,20 @@ def _build_content(window) -> QWidget:
         if arg.lower().endswith(".pdf") and Path(arg).is_file():
             viewer.open_path(arg)
             break
+
+    # Second launch → this running instance: run_app forwards the new launch's
+    # argv over the single-instance socket and re-emits it as
+    # AppBus.files_received (the raise itself is already wired there). Open the
+    # first real PDF in the payload — same filter as the argv loop above, so
+    # `butterpdf doc.pdf` behaves identically whether it's the first launch or
+    # the tenth.
+    def _open_forwarded(paths: list) -> None:
+        for p in paths:
+            if str(p).lower().endswith(".pdf") and Path(p).is_file():
+                viewer.open_path(p)
+                break
+
+    AppBus.get().files_received.connect(_open_forwarded)
     return viewer
 
 

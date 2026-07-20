@@ -119,3 +119,52 @@ def test_settings_dialog_hides_autostart_when_unsupported(monkeypatch):
         assert not hasattr(dlg, "autostart_check")
     finally:
         dlg.deleteLater()
+
+
+# ── Second-launch file forwarding → the viewer ──────────────────────────────
+class _StubWindow:
+    """Just enough window for _build_content: a footer slot + a bare top_bar
+    (no bind_viewer, so the menu wiring is skipped)."""
+
+    def __init__(self):
+        self.top_bar = object()
+        self.footer = None
+
+    def set_footer(self, w):
+        self.footer = w
+
+
+def test_files_received_opens_forwarded_pdf(qapp, fresh_bus, tmp_path):
+    """Round-trip for the second-launch path: run_app re-emits the forwarded
+    argv as AppBus.files_received; _build_content binds it to the viewer, so
+    a `butterpdf doc.pdf` against a running instance opens the document."""
+    from tests.test_viewer import _minimal_pdf
+
+    pdf = tmp_path / "forwarded.pdf"
+    pdf.write_bytes(_minimal_pdf())
+
+    viewer = app_mod._build_content(_StubWindow())
+    try:
+        fresh_bus.files_received.emit([str(pdf)])
+        qapp.processEvents()
+        from PySide6.QtPdf import QPdfDocument
+
+        assert viewer._doc.status() == QPdfDocument.Status.Ready
+        assert viewer._path == str(pdf)
+    finally:
+        viewer.deleteLater()
+
+
+def test_files_received_ignores_non_pdfs(qapp, fresh_bus, tmp_path):
+    """The forwarded payload is unfiltered argv — same .pdf-and-exists filter
+    as the first-launch loop, so a stray text file never reaches the engine."""
+    txt = tmp_path / "notes.txt"
+    txt.write_text("not a pdf")
+
+    viewer = app_mod._build_content(_StubWindow())
+    try:
+        fresh_bus.files_received.emit([str(txt), str(tmp_path / "gone.pdf")])
+        qapp.processEvents()
+        assert viewer._path is None  # nothing opened; the empty state stays
+    finally:
+        viewer.deleteLater()
