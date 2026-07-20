@@ -4,7 +4,7 @@
 # The dough commit this loaf was last reconciled against. butterPDF was scaffolded
 # from dough at 8d9610e (the `dough new` commit), before the first-looks backport
 # it drove. `--record` stamps this to dough HEAD after a sync.
-synced_from = "783dbfc"
+synced_from = "5f073c2"
 
 # Files (relative to the butterpdf/ package dir) the fork OWNS — net-new app code or
 # modules it fully rewrote. Sync never reads or writes these.
@@ -25,4 +25,12 @@ manual = [
     "identity.py",  # display_name "butterPDF" — the whole-word transform would regress it
     "settings.py",         # + document_bg (the PDF page-background mode, B1)
     "settings_dialog.py",  # non-modal + the DOCUMENT BACKGROUND selector (B1)
+    # Catalog basenames are butterpdf_<code> here; the whole-word transform can't
+    # rename dough's literal `dough_` prefix (`_` is a word char, so \b never
+    # fires) — an AUTO overwrite would regress them to dough_<code>. Also the
+    # home of SHIPPED_LANGUAGES once butterPDF ships a catalog.
+    "i18n/__init__.py",    # 2026-07-20 sync: butterpdf_<code> catalog names
 ]
+
+# system_accent.py (2026-07-20 sync) transforms cleanly and stays AUTO — promote
+# it here the moment it's hand-customized.
