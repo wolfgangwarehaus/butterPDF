@@ -114,8 +114,8 @@ class SmoothScrollFilter(QObject):
             if isinstance(widget, QAbstractScrollArea):
                 # Per-widget opt-out: a compact surface (e.g. a dropdown list)
                 # can ask to scroll NATIVELY — no momentum glide, precise
-                # per-notch control — by setting property("dough_native_scroll").
-                if widget.property("dough_native_scroll"):
+                # per-notch control — by setting property("butterpdf_native_scroll").
+                if widget.property("butterpdf_native_scroll"):
                     return None
                 # Honor ScrollBarAlwaysOff as a declared "this axis
                 # doesn't scroll here" hint — even if the bar reports

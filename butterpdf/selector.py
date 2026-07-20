@@ -131,15 +131,23 @@ def selector_qss(host_selector: str = "") -> str:
     except Exception:
         _ar, _ag, _ab = (255, 255, 255)
     prefix = f"{host_selector} " if host_selector else ""
+    # RTL: QSS padding / text-align don't auto-mirror the way layouts do, so
+    # flip them here (the 32px chevron reserve swaps edges, matching the
+    # mirrored chevron paint in Selector.paintEvent). Direction is fixed at
+    # boot — it follows the installed language — so the theme-change
+    # re-apply hosts already do keeps this correct.
+    rtl = QApplication.instance() is not None and QApplication.isRightToLeft()
+    padding = "6px 12px 6px 32px" if rtl else "6px 32px 6px 12px"
+    text_align = "right" if rtl else "left"
     return f"""
         {prefix}QPushButton#doughSelector {{
             background: {ink_alpha(0.06)};
             color: {TEXT};
             border: 1px solid rgba({_ar},{_ag},{_ab},0.45);
             border-radius: {rad(6)}px;
-            padding: 6px 32px 6px 12px;
+            padding: {padding};
             {type_qss(TYPE_BODY)}
-            text-align: left;
+            text-align: {text_align};
             outline: 0;
         }}
         {prefix}QPushButton#doughSelector:hover {{
@@ -164,9 +172,16 @@ class Selector(QPushButton):
     # trips this; every other selector (theme, quality, ~<10) stays a menu.
     _LONG_LIST_THRESHOLD = 40
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, accessible_name: str = ""):
         super().__init__(parent)
         self.setObjectName("doughSelector")
+        # A Selector reads as its current VALUE ("Frosted dark"), which tells
+        # a screen reader nothing about what the control chooses — pass the
+        # row label ("Theme") as accessible_name so it announces as
+        # "Theme, Frosted dark". Hosts that build a caption QLabel above the
+        # control should pass the same string here.
+        if accessible_name:
+            self.setAccessibleName(accessible_name)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         # autoDefault off so the selector doesn't get the Qt-default
         # "default action" outline when its dialog is shown — matches
@@ -299,8 +314,12 @@ class Selector(QPushButton):
         renderer = QSvgRenderer(svg_bytes)
         if not renderer.isValid():
             return
-        # Right edge of the widget minus the inset; vertically centred.
-        x = self.width() - _CHEVRON_RIGHT_PAD - _CHEVRON_SIZE
+        # Trailing edge of the widget minus the inset (mirrors under RTL,
+        # matching selector_qss's flipped padding reserve); vertically centred.
+        if self.layoutDirection() == Qt.LayoutDirection.RightToLeft:
+            x = _CHEVRON_RIGHT_PAD
+        else:
+            x = self.width() - _CHEVRON_RIGHT_PAD - _CHEVRON_SIZE
         y = (self.height() - _CHEVRON_SIZE) / 2.0
         p = QPainter(self)
         try:
@@ -436,6 +455,10 @@ class Selector(QPushButton):
 
         lw = QListWidget()
         lw.setObjectName("doughSelectorList")
+        # The popup list announces under the selector's own name (the QMenu
+        # host is chrome; the list is what the reader traverses). Arrow keys /
+        # Enter already work — _focus_list drops keyboard focus on it at show.
+        lw.setAccessibleName(self.accessibleName() or self.text())
         lw.setFrameShape(QFrame.Shape.NoFrame)
         lw.setUniformItemSizes(True)
         lw.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -443,7 +466,7 @@ class Selector(QPushButton):
         # which felt way too fast here) and snap to whole rows — a precise,
         # controlled dropdown feel for a long (200-item) list. The property is
         # honoured by butterpdf.smooth_scroll.SmoothScrollFilter.
-        lw.setProperty("dough_native_scroll", True)
+        lw.setProperty("butterpdf_native_scroll", True)
         lw.setVerticalScrollMode(QListWidget.ScrollMode.ScrollPerItem)
         lw.setStyleSheet(
             f"""
