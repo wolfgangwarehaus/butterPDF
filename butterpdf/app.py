@@ -246,6 +246,27 @@ def run_app(content_factory, *, identity=None, single_instance=True) -> int:
     # both survive the app_id change.
     app.setDesktopFileName(ident.desktop_id())
 
+    # Structured file logging (butterpdf.log): rotating file under the app state
+    # dir + a WARNING console handler, level from BUTTERPDF_LOG. Installed HERE —
+    # after the Qt identity names, so AppDataLocation resolves per-app; before
+    # everything else, so the whole boot is captured. Best-effort, never fatal.
+    try:
+        from butterpdf import log as _log
+
+        _log.install()
+    except Exception:
+        pass
+
+    # Versioned settings migrations — run BEFORE Settings (or anything that
+    # reads the store: i18n's language override, the persisted theme) is first
+    # read, so every accessor sees the post-migration key layout.
+    try:
+        from butterpdf import settings_migration
+
+        settings_migration.migrate()
+    except Exception:
+        pass
+
     # Install translation catalogs (Settings override → system locale) before
     # ANY widget is built — Qt translates at construction time. Never raises;
     # a missing catalog just leaves the English source strings.
@@ -260,9 +281,15 @@ def run_app(content_factory, *, identity=None, single_instance=True) -> int:
         from butterpdf.single_instance import SingleInstance
 
         si = SingleInstance(ident.app())
-        if not si.acquire():
+        # Forward this launch's argv (file paths / URLs) so the running copy
+        # opens them — the "double-click a PDF while the app is open" path.
+        if not si.acquire(sys.argv[1:]):
             return 0  # another instance was found and signalled to come forward
         app._dough_single_instance = si
+        # Re-emit forwarded files on the bus so app code binds with zero refs.
+        si.files_received.connect(
+            lambda paths: AppBus.get().files_received.emit(list(paths))
+        )
 
     # Persisted accent / colour overrides must load BEFORE the first widget, so
     # every surface stamps from the saved palette rather than the defaults.
@@ -367,6 +394,34 @@ def run_app(content_factory, *, identity=None, single_instance=True) -> int:
     from butterpdf import drag_repaint
 
     drag_repaint.sync()
+
+    # Agent test bridge — dev-only remote control for live end-to-end testing.
+    # OFF unless BUTTERPDF_TEST_BRIDGE=1 is set at launch. Stands up a per-user
+    # local socket whose JSON commands (click / tree / screenshot / settings /
+    # eval …) run on the GUI thread, so an agent can drive the real app
+    # deterministically — including on Wayland, where synthetic OS input is
+    # unreliable. Never enabled in a shipped build. See butterpdf/test_bridge.py
+    # + docs/TEST_BRIDGE.md.
+    if os.environ.get("BUTTERPDF_TEST_BRIDGE") == "1":
+        from butterpdf.test_bridge import TestBridge
+
+        app._butterpdf_test_bridge = TestBridge(app, win)
+        app._butterpdf_test_bridge.start()
+
+    # Daily update check — deferred a few seconds off the first-paint path.
+    # Gated inside maybe_check(): the Settings toggle, the once-a-day throttle,
+    # and the channel rule (Store / MAS / AUR builds never nag). Best-effort.
+    def _check_updates():
+        try:
+            from butterpdf import updates
+
+            updates.maybe_check()
+        except Exception:
+            pass
+
+    from PySide6.QtCore import QTimer
+
+    QTimer.singleShot(3000, _check_updates)
 
     return app.exec()
 

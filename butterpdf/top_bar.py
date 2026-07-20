@@ -70,6 +70,15 @@ class TopBar(CenteredBar):
         lay.addWidget(self.settings_btn)
         lay.addStretch(1)
 
+        # Update-available chip — invisible until butterpdf.updates finds a
+        # newer release (AppBus.update_available); Download / What's-new /
+        # Dismiss. Sits just left of the window controls, clear of the
+        # centered doc name.
+        from butterpdf.update_chip import UpdateChip
+
+        self.update_chip = UpdateChip(self)
+        lay.addWidget(self.update_chip)
+
         # ── right: window controls ─────────────────────────────────────────
         if titlebar_mode:
             self.min_btn = self._chrome_button("win_minimize", "Minimize")
@@ -152,7 +161,10 @@ class TopBar(CenteredBar):
             self._viewer.open_dialog()
 
     def _chrome_button(self, icon_name: str, tip: str) -> IconButton:
-        b = IconButton()
+        # accessible_name passed explicitly (the preferred pattern) even
+        # though the tooltip would fall back to the same string — a call site
+        # that later reworks its tooltip wording keeps a stable announced name.
+        b = IconButton(accessible_name=tip)
         b.setIcon(icon(icon_name))
         b.setToolTip(tip)
         b.setFixedSize(32, 28)

@@ -50,7 +50,7 @@ class SettingsDialog(FrostedDialog):
         self.setStyleSheet(self.styleSheet() + selector_qss())
 
         self.content_layout.addWidget(self._label("THEME"))
-        self.theme_sel = Selector()
+        self.theme_sel = Selector(accessible_name=self.tr("Theme"))
         for lbl, val in _THEME_MODES:
             self.theme_sel.addItem(lbl, val)
         self._select(self.theme_sel, self.s.theme_mode)
@@ -63,7 +63,7 @@ class SettingsDialog(FrostedDialog):
         # Transparent is the frosted see-through look. Applies live. Sits right
         # under Theme since it's the other big look control.
         self.content_layout.addWidget(self._label("DOCUMENT BACKGROUND"))
-        self.doc_bg_sel = Selector()
+        self.doc_bg_sel = Selector(accessible_name=self.tr("Document background"))
         for value, label in DOC_BG_OPTIONS:
             self.doc_bg_sel.addItem(label, value)
         self._select(self.doc_bg_sel, self.s.document_bg)
@@ -82,7 +82,7 @@ class SettingsDialog(FrostedDialog):
         self.content_layout.addWidget(self.follow_accent_check)
 
         self.content_layout.addWidget(self._label("FONT SIZE"))
-        self.font_sel = Selector()
+        self.font_sel = Selector(accessible_name=self.tr("Font size"))
         for lbl, val in _FONT_SIZES:
             self.font_sel.addItem(lbl, val)
         self._select(self.font_sel, self.s.font_scale)
@@ -96,7 +96,7 @@ class SettingsDialog(FrostedDialog):
         # built-in Inter stack. Applies LIVE (no restart) via the global QSS
         # font stack + app.setFont; SVG icons are never touched.
         self.content_layout.addWidget(self._label("FONT FAMILY"))
-        self.family_sel = Selector()
+        self.family_sel = Selector(accessible_name=self.tr("Font family"))
         self.family_sel.addItem("System default", "")
         from PySide6.QtGui import QFont, QFontDatabase
 
@@ -134,7 +134,7 @@ class SettingsDialog(FrostedDialog):
 
         if SHIPPED_LANGUAGES:
             self.content_layout.addWidget(self._label("LANGUAGE"))
-            self.language_sel = Selector()
+            self.language_sel = Selector(accessible_name=self.tr("Language"))
             self.language_sel.addItem(self.tr("System default"), "")
             self.language_sel.addItem("English", "en")
             for _code, _en_name, _native in SHIPPED_LANGUAGES:
@@ -150,12 +150,39 @@ class SettingsDialog(FrostedDialog):
         # box reads is_enabled() and writes enable()/disable() directly.
         from butterpdf import autostart
 
+        self.content_layout.addWidget(self._label(self.tr("SYSTEM")))
         if autostart.is_supported():
-            self.content_layout.addWidget(self._label("SYSTEM"))
-            self.autostart_check = QCheckBox("Launch on login")
+            self.autostart_check = QCheckBox(self.tr("Launch on login"))
             self.autostart_check.setChecked(autostart.is_enabled())
             self.autostart_check.toggled.connect(self._on_autostart)
             self.content_layout.addWidget(self.autostart_check)
+
+        # Daily update check (butterpdf.updates) — the top-bar chip. The toggle
+        # is honoured by maybe_check(); auto-updating channels (Store / MAS /
+        # AUR) stay silent regardless, so leaving this visible there is harmless.
+        self.updates_check = QCheckBox(self.tr("Check for updates"))
+        self.updates_check.setChecked(self.s.check_for_updates)
+        self.updates_check.toggled.connect(self._on_check_updates)
+        self.content_layout.addWidget(self.updates_check)
+
+        # Copy diagnostics — the one-click support report (butterpdf.diagnostics):
+        # versions, platform/session, theme + verified blur status, a
+        # secrets-excluded settings dump, the log tail. Lands on the clipboard.
+        from PySide6.QtWidgets import QHBoxLayout as _QHBoxLayout
+        from PySide6.QtWidgets import QPushButton
+
+        from butterpdf.design_tokens import BTN_SECONDARY, button_qss
+
+        self.diagnostics_btn = QPushButton(self.tr("Copy diagnostics"))
+        self.diagnostics_btn.setStyleSheet(button_qss(BTN_SECONDARY))
+        self.diagnostics_btn.setToolTip(
+            self.tr("Copy a support report (no credentials) to the clipboard")
+        )
+        self.diagnostics_btn.clicked.connect(self._on_copy_diagnostics)
+        _diag_row = _QHBoxLayout()
+        _diag_row.addWidget(self.diagnostics_btn)
+        _diag_row.addStretch(1)
+        self.content_layout.addLayout(_diag_row)
 
         self._restart_note = QLabel("")
         self._restart_note.setStyleSheet(
@@ -176,6 +203,7 @@ class SettingsDialog(FrostedDialog):
         for name, hex_ in ACCENT_PRESETS:
             sw = ui_helpers.CircleSwatch(hex_, diameter=28, hover_ring="#99ffffff")
             sw.setToolTip(name)
+            sw.setAccessibleName(name)  # a swatch has no text — announce the color
             sw.clicked.connect(lambda _=False, h=hex_: self._on_accent(h))
             self._swatches.append((sw, hex_))
             row.addWidget(sw)
@@ -253,6 +281,18 @@ class SettingsDialog(FrostedDialog):
         # i18n.install before any widget exists), so show the restart notice.
         self.s.language = self.language_sel.currentData() or ""
         self._restart_note.setText("Language applies after a restart.")
+
+    def _on_check_updates(self, on: bool) -> None:
+        self.s.check_for_updates = bool(on)
+
+    def _on_copy_diagnostics(self) -> None:
+        from butterpdf import diagnostics
+
+        if diagnostics.copy_to_clipboard():
+            # Acknowledge in the dialog's own notice line — no extra dialog.
+            self._restart_note.setText(self.tr("Diagnostics copied to clipboard."))
+        else:
+            self._restart_note.setText(self.tr("Could not copy diagnostics."))
 
     def _on_autostart(self, on: bool) -> None:
         from butterpdf import autostart
