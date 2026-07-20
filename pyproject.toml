@@ -67,7 +67,17 @@ dependencies = [
 # shipped app never imports it. dev includes it so the generate-then-verify gate
 # (tests/test_bake.py) runs in the default test pass.
 bake = ["jinja2>=3"]
-dev = ["ruff", "pytest", "pytest-xdist", "setuptools-scm>=8", "jinja2>=3"]
+dev = [
+    "ruff", "pytest", "pytest-xdist", "setuptools-scm>=8", "jinja2>=3",
+    # the credentials-store test surface (keyring is mocked; AES-GCM is real —
+    # cryptography is already a BASE dependency here for PDF permissions)
+    "keyring>=24",
+]
+# Named-secret store (butterpdf/credentials.py): OS keyring primary + an
+# encrypted QSettings resilience blob. cryptography's AES-GCM arm ships in the
+# base deps already (PDF permissions), so the extra only adds keyring —
+# Windows uses ctypes DPAPI instead, zero extra deps.
+credentials = ["keyring>=24"]
 
 [project.gui-scripts]
 butterpdf = "butterpdf.app:main"

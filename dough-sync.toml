@@ -25,12 +25,17 @@ manual = [
     "identity.py",  # display_name "butterPDF" — the whole-word transform would regress it
     "settings.py",         # + document_bg (the PDF page-background mode, B1)
     "settings_dialog.py",  # non-modal + the DOCUMENT BACKGROUND selector (B1)
-    # Catalog basenames are butterpdf_<code> here; the whole-word transform can't
-    # rename dough's literal `dough_` prefix (`_` is a word char, so \b never
-    # fires) — an AUTO overwrite would regress them to dough_<code>. Also the
-    # home of SHIPPED_LANGUAGES once butterPDF ships a catalog.
-    "i18n/__init__.py",    # 2026-07-20 sync: butterpdf_<code> catalog names
 ]
 
+# i18n/__init__.py was manual for one sync (butterpdf_<code> catalog basenames);
+# dough fddc1af taught the transform the lowercase `dough_` prefix, verified to
+# reproduce the loaf's copy byte-for-byte on the 07-20 sync — demoted to AUTO.
+# It moves back to manual the moment SHIPPED_LANGUAGES gains an entry here.
+#
+# The 07-20 foundations/surfaces bundle (log.py, settings_migration.py,
+# credentials.py, updates.py, update_chip.py, diagnostics.py, test_bridge.py,
+# i18n/fmt.py) landed via the transform and stays AUTO — BUTTERPDF_* env names
+# and butterpdf_* prefixes verified. Mirrors dough's own shared.toml stance
+# (those are dough-authored/genericized modules; the loaf takes them as-is).
 # system_accent.py (2026-07-20 sync) transforms cleanly and stays AUTO — promote
-# it here the moment it's hand-customized.
+# any of these here the moment they're hand-customized.

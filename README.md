@@ -29,6 +29,25 @@ a blank canvas with the hard parts already done. See
   per-platform backend pattern (autostart / notifications / power), a minimal
   `AppBus` signal bus, slim persistent `Settings`, single-instance.
 - **HiDPI done right** — PassThrough fractional scaling + device-pixel snapping.
+- **Languages for free** — Qt translation catalogs wired at boot, plural-aware
+  strings, locale-safe number/date/duration formatting (`butterpdf.i18n.fmt`),
+  RTL-mirrored chrome. See `docs/TRANSLATING.md`.
+- **Accessible by default** — every kit control announces to screen readers
+  (a test fails the build on unnamed ones), visible keyboard-focus states, a
+  keyboard path for every mouse path. See `docs/ACCESSIBILITY.md`.
+- **Structured logging** — an opt-in rotating file log (~1 MB × 3) in the app's
+  state dir, console noise capped at WARNING, `BUTTERPDF_LOG=debug` to turn it up.
+- **Settings migrations** — a versioned run-once migration runner
+  (`meta/schema_version`), so a renamed key never strands an installed user.
+- **Credentials store** — `save_secret`/`load_secret`: OS keyring first, an
+  encrypted per-machine blob (AES-GCM, or DPAPI on Windows) as the fallback —
+  plaintext never touches disk.
+- **Second-launch file forwarding** — double-click a PDF while butterPDF is
+  open and the running window raises + opens it (`AppBus.files_received`).
+- **Update chip** — a quiet daily GitHub release check with a dismissable
+  Download / What's-new pill in the top bar; store/AUR builds stay silent.
+- **Diagnostics bundle** — a "Copy diagnostics" button that snapshots versions,
+  platform, theme/blur state, settings (secrets excluded), and the log tail.
 
 ## Quick start
 
