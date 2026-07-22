@@ -46,8 +46,10 @@ class SettingsDialog(FrostedDialog):
         # the blocked parent.
         self.setModal(False)
         self.s = get_settings()
-        # Merge the Selector QSS into the dialog's sheet so the dropdowns style.
-        self.setStyleSheet(self.styleSheet() + selector_qss())
+        # The Selector QSS is folded in by _extra_qss() (below), re-stamped with
+        # the live accent on every theme_changed — so a change made in THIS
+        # dialog updates its own dropdowns too. (The base FrostedDialog already
+        # applied it once via register_for_theme in super().__init__.)
 
         self.content_layout.addWidget(self._label("THEME"))
         self.theme_sel = Selector(accessible_name=self.tr("Theme"))
@@ -189,6 +191,17 @@ class SettingsDialog(FrostedDialog):
             f"color: {ui_helpers.WARN_FG}; {type_qss(TYPE_CAPTION)}"
         )
         self.content_layout.addWidget(self._restart_note)
+
+    # ── Live accent (mirrors the base fix; kept in step with dough) ─────────
+    def _extra_qss(self) -> str:
+        return selector_qss()  # fresh (reads the live accent) on every restyle
+
+    def _restyle(self) -> None:
+        super()._restyle()  # GLOBAL_STYLE + selector_qss(), live accent
+        if hasattr(self, "diagnostics_btn"):
+            from butterpdf.design_tokens import BTN_SECONDARY, button_qss
+
+            self.diagnostics_btn.setStyleSheet(button_qss(BTN_SECONDARY))
 
     # ── Builders ───────────────────────────────────────────────────────────
     def _label(self, text: str) -> QLabel:
