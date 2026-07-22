@@ -134,14 +134,12 @@ class _StubWindow:
         self.footer = w
 
 
-def test_files_received_opens_forwarded_pdf(qapp, fresh_bus, tmp_path):
+def test_files_received_opens_forwarded_pdf(qapp, fresh_bus, tmp_path, minimal_pdf):
     """Round-trip for the second-launch path: run_app re-emits the forwarded
     argv as AppBus.files_received; _build_content binds it to the viewer, so
     a `butterpdf doc.pdf` against a running instance opens the document."""
-    from tests.test_viewer import _minimal_pdf
-
     pdf = tmp_path / "forwarded.pdf"
-    pdf.write_bytes(_minimal_pdf())
+    pdf.write_bytes(minimal_pdf)
 
     viewer = app_mod._build_content(_StubWindow())
     try:
