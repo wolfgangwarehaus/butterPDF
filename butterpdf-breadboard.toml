@@ -1,156 +1,138 @@
-# The breadboard — the live maker surface. The WINDOW (`dough-breadboard`) and
+# The breadboard — the live maker surface. The WINDOW (`butterpdf-breadboard`) and
 # the AI AGENT both read and write this file; your edits here are directives
 # the agent re-ingests (see AGENTS.md). Git-tracked on purpose.
 
-schema = 1
+schema = 2
 product = "butterPDF"
 goal = "Ship butterPDF v1 to real users: the frosted, fast, native Linux PDF tool that closes open → fill → sign → save correctly — no web server, no $69 watermark, no AGPL."
 purpose = ""
 agent_request = ""
 
 [[ingredients]]
+id = "b60a33"
 text = "Name + slug settled; scaffolded via dough new"
 done = true
 by = "AI"
 date = "2026-06-22"
-note = ""
 
 [[ingredients]]
+id = "3685e3"
 text = "Brief written (BRIEF.md): who it's for, v1 scope, stack (no AGPL)"
 done = true
 by = "AI"
 date = "2026-06-22"
-note = ""
 
 [[ingredients]]
+id = "8ab93c"
 text = "Brand: logo SVG + accent"
 done = true
 by = "AI"
 date = "2026-06-22"
-note = ""
 
 [[ingredients]]
+id = "ce9bd8"
 text = "Delivery targets chosen: PyPI (butterpdf is free) + AUR first; deb/AppImage artifacts"
 done = true
 by = "AI"
 date = "2026-07-02"
-note = ""
 
 [[baking]]
+id = "74944b"
 text = "MVP #1: the PDF viewer (open/render/zoom/page-nav)"
 done = true
 priority = "next"
 by = "AI"
 date = "2026-06-22"
-note = ""
 
 [[baking]]
+id = "e0e29d"
 text = "B1-B5: fill, save/flatten, quick-sign, converters, safe-open"
 done = true
 priority = "next"
 by = "AI"
 date = "2026-07-02"
-note = ""
 
 [[baking]]
+id = "e4ccad"
 text = "Walkthrough refinements: smooth ink, baked ✕, CLI front, editable install"
 done = true
 priority = "next"
 by = "August"
 date = "2026-07-03"
-note = ""
 
 [[baking]]
+id = "261ae6"
 text = "Frosted context menus + in-place text boxes + sign-here (walkthrough round 2)"
 done = true
 priority = "next"
 by = "August"
 date = "2026-07-08"
-note = ""
 
 [[baking]]
+id = "3775ad"
 text = "Feel verdicts: drag/zoom/scroll + dark backgrounds + wide-signature resolution"
 done = false
 priority = "next"
-by = ""
-date = ""
-note = ""
 
 [[baking]]
+id = "3814b0"
 text = "Cross-viewer check of a saved+flattened PDF in Okular/Firefox"
 done = true
 priority = "next"
 by = "August"
 date = "2026-07-08"
-note = ""
 
 [[baking]]
+id = "d25354"
 text = "in-place text boxes + page context menu (fills non-interactive PDFs)"
 done = true
 priority = "next"
 by = "AI"
 date = "2026-07-08"
-note = ""
 
 [[delivery]]
+id = "2628bb"
 text = "dough v0.1.0 tagged (the base the release depends on)"
 done = false
-by = ""
-date = ""
-note = ""
 
 [[delivery]]
+id = "51a9d5"
 text = "Version tagged; release.yml drafts; review + PUBLISH"
 done = false
-by = ""
-date = ""
-note = ""
 
 [[delivery]]
+id = "4bea37"
 text = "PyPI pending-publisher setup for butterpdf, then the first publish"
 done = false
-by = ""
-date = ""
-note = ""
 
 [[delivery]]
+id = "800cea"
 text = "Channels one by one via butterpdf-deliver (AUR next)"
 done = false
-by = ""
-date = ""
-note = ""
 
 [[improvements]]
+id = "d87b81"
 text = "S1 (HIGH): hierarchical field values silently dropped on save"
 done = false
-by = ""
-date = ""
 note = "HIGH — fix before or right after C3 (chips exist in the session)"
 
 [[improvements]]
+id = "8669c1"
 text = "S2 (HIGH): rotated-page signature/overlay placement"
 done = false
-by = ""
-date = ""
 note = "HIGH — fix before or right after C3 (chips exist in the session)"
 
 [[improvements]]
+id = "ec9d57"
 text = "S3: CJK/emoji values bake as ? glyphs (font embedding)"
 done = false
-by = ""
-date = ""
-note = ""
 
 [[improvements]]
+id = "3a4276"
 text = "Verifiable-sign (PAdES via pyHanko) — the BRIEF fast-follow"
 done = false
-by = ""
-date = ""
-note = ""
 
 [[improvements]]
+id = "199614"
 text = "PDF dark mode as a first-class setting (independent of chrome theme)"
 done = false
-by = ""
-date = ""
-note = ""
