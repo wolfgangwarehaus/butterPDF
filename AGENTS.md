@@ -50,9 +50,20 @@ it honest as you work, don't let it drift behind reality.
   and leave a one-line `note` on what happened. Add items for work you discover.
   Commit the board **in the same commit** as the code it describes.
 
-**The file format** — schema 2; mirror it exactly. The window re-emits a
-byte-stable form on every save, so keep your edits minimal and valid TOML and the
-diffs stay clean:
+**Edit it through the CLI** — safer than hand-editing (it can't drop an `id` or
+write invalid TOML), and the open window live-reloads each change:
+
+    butterpdf-breadboard list [phase]                     # ids + state — read first
+    butterpdf-breadboard add <phase> "text" [--priority now|next|later] [--note "…"]
+    butterpdf-breadboard check <id> [--off] [--note "…"]  # done / reopen (stamps you)
+    butterpdf-breadboard note <id> "text"
+    butterpdf-breadboard priority <id> now|next|later     # move a baking card
+    butterpdf-breadboard rm <id>
+    butterpdf-breadboard request --clear                  # after you fulfil agent_request
+
+**The file format** — the CLI writes this for you; when you hand-edit or read it
+directly it's schema 2 (mirror it exactly; the window re-emits a byte-stable form
+on every save, so keep your edits minimal and valid TOML and the diffs stay clean):
 
 - Top level: `schema`, `product`, `goal`, `purpose`, `agent_request`.
 - Four phase arrays of tables: `[[ingredients]]`, `[[baking]]`, `[[delivery]]`,
